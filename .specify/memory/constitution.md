@@ -1,50 +1,108 @@
-# [PROJECT_NAME] Constitution
-<!-- Example: Spec Constitution, TaskFlow Constitution, etc. -->
+# Health Factor Monitor Constitution
 
 ## Core Principles
 
-### [PRINCIPLE_1_NAME]
-<!-- Example: I. Library-First -->
-[PRINCIPLE_1_DESCRIPTION]
-<!-- Example: Every feature starts as a standalone library; Libraries must be self-contained, independently testable, documented; Clear purpose required - no organizational-only libraries -->
+### I. Provider-Based Architecture
 
-### [PRINCIPLE_2_NAME]
-<!-- Example: II. CLI Interface -->
-[PRINCIPLE_2_DESCRIPTION]
-<!-- Example: Every library exposes functionality via CLI; Text in/out protocol: stdin/args → stdout, errors → stderr; Support JSON + human-readable formats -->
+The application SHALL separate business logic from protocol-specific implementations.
 
-### [PRINCIPLE_3_NAME]
-<!-- Example: III. Test-First (NON-NEGOTIABLE) -->
-[PRINCIPLE_3_DESCRIPTION]
-<!-- Example: TDD mandatory: Tests written → User approved → Tests fail → Then implement; Red-Green-Refactor cycle strictly enforced -->
+The core domain MUST remain independent of blockchain networks, SDKs, RPC providers, and third-party APIs.
 
-### [PRINCIPLE_4_NAME]
-<!-- Example: IV. Integration Testing -->
-[PRINCIPLE_4_DESCRIPTION]
-<!-- Example: Focus areas requiring integration tests: New library contract tests, Contract changes, Inter-service communication, Shared schemas -->
+Every lending protocol (e.g., Aave, Kamino, Morpho, Compound) MUST implement a common Provider interface, allowing new integrations without modifying existing business logic.
 
-### [PRINCIPLE_5_NAME]
-<!-- Example: V. Observability, VI. Versioning & Breaking Changes, VII. Simplicity -->
-[PRINCIPLE_5_DESCRIPTION]
-<!-- Example: Text I/O ensures debuggability; Structured logging required; Or: MAJOR.MINOR.BUILD format; Or: Start simple, YAGNI principles -->
+The architecture SHALL favor composition over conditional logic, enabling new providers to be added through extension rather than modification.
 
-## [SECTION_2_NAME]
-<!-- Example: Additional Constraints, Security Requirements, Performance Standards, etc. -->
+---
 
-[SECTION_2_CONTENT]
-<!-- Example: Technology stack requirements, compliance standards, deployment policies, etc. -->
+### II. Interface Independence
 
-## [SECTION_3_NAME]
-<!-- Example: Development Workflow, Review Process, Quality Gates, etc. -->
+Business logic MUST NOT depend on any specific user interface.
 
-[SECTION_3_CONTENT]
-<!-- Example: Code review requirements, testing gates, deployment approval process, etc. -->
+The CLI is the initial interface for the MVP, but the same application services MUST be reusable by future interfaces such as Telegram bots, REST APIs, scheduled jobs, or web dashboards.
+
+No business rules SHALL be implemented directly inside interface adapters.
+
+---
+
+### III. Simplicity & Incremental Delivery
+
+The project SHALL prioritize simple, maintainable solutions.
+
+Each specification MUST deliver a small, complete, and independently valuable increment.
+
+Infrastructure, dependencies, and architectural complexity MUST only be introduced when justified by explicit project requirements.
+
+The project SHALL follow the YAGNI ("You Aren't Gonna Need It") principle by default.
+
+---
+
+### IV. Quality & Maintainability
+
+All external dependencies MUST be abstracted behind interfaces.
+
+Business logic SHOULD be deterministic, testable, and independent from infrastructure concerns.
+
+All operations interacting with external resources MUST receive a `context.Context`.
+
+Errors MUST be returned explicitly and never silently ignored.
+
+Logging SHOULD be structured and provide enough information for troubleshooting without exposing sensitive information.
+
+Automated tests MUST accompany all business logic.
+
+---
+
+### V. Extensibility
+
+The architecture SHALL support continuous evolution without requiring significant refactoring.
+
+Adding support for a new lending protocol, blockchain network, notification channel, or user interface SHOULD require only new implementations of existing abstractions.
+
+Breaking existing functionality to introduce new capabilities is discouraged unless explicitly justified by a specification.
+
+## Technology Standards
+
+The project SHALL use:
+
+- Go as the primary programming language.
+- Git for version control.
+- GitHub as the source code hosting platform.
+- Go Modules for dependency management.
+- Standard Go tooling whenever possible.
+
+Technology choices not defined by this Constitution SHALL be decided during the planning phase of each specification.
+
+## Development Workflow
+
+All development MUST follow the Spec Kit workflow.
+
+Each feature SHALL progress through the following phases:
+
+1. Constitution
+2. Specification
+3. Clarification (when applicable)
+4. Planning
+5. Tasks
+6. Implementation
+7. Analysis (recommended)
+
+Specifications MUST describe expected behavior and business outcomes rather than implementation details.
+
+Implementation decisions belong to the Planning phase.
 
 ## Governance
-<!-- Example: Constitution supersedes all other practices; Amendments require documentation, approval, migration plan -->
 
-[GOVERNANCE_RULES]
-<!-- Example: All PRs/reviews must verify compliance; Complexity must be justified; Use [GUIDANCE_FILE] for runtime development guidance -->
+This Constitution is the highest-level engineering authority for the project.
 
-**Version**: [CONSTITUTION_VERSION] | **Ratified**: [RATIFICATION_DATE] | **Last Amended**: [LAST_AMENDED_DATE]
-<!-- Example: Version: 2.1.1 | Ratified: 2025-06-13 | Last Amended: 2025-07-16 -->
+Every specification, implementation plan, and code contribution MUST comply with these principles.
+
+Architectural deviations MUST be explicitly documented and justified within the corresponding specification.
+
+Changes to this Constitution require:
+- A documented rationale.
+- A version increment.
+- Review before adoption.
+
+**Version**: 1.0.0  
+**Ratified**: 2026-07-26  
+**Last Amended**: 2026-07-26
