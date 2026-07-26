@@ -1,43 +1,109 @@
 # Research: Health Factor Monitor MVP
 
-## Blockchain RPC Interaction Pattern
+## Integration Philosophy
 
 ### Decision
-Use raw JSON-RPC calls over HTTP for both Ethereum and Solana. No blockchain SDK dependencies.
+
+Prefer the Go standard library whenever practical.
+
+Third-party dependencies may be introduced when they provide significant value, are officially maintained by the protocol, or substantially reduce implementation complexity without compromising the architecture.
+
+The application architecture must never depend on a specific SDK. All protocol-specific implementations remain isolated behind provider interfaces.
 
 ### Rationale
-- Keeps business logic independent of third-party SDKs (Constitution requirement)
-- No heavyweight dependencies like `go-ethereum` (~50MB dependency tree)
-- Both Ethereum and Solana expose standard JSON-RPC interfaces
-- Standard `net/http` and `encoding/json` are sufficient
-- Adding an SDK provides minimal value for the read-only, single-call pattern needed here
 
-### Alternatives Considered
-- **go-ethereum**: Would add significant dependency weight; couples domain to Geth types
-- **solana-go**: Similar weight and coupling concerns
-- **GraphQL/subgraph**: Adds infrastructure dependency not justified for MVP scope
-- **gRPC**: Over-engineered for simple read-only queries
+- Keeps the codebase simple and maintainable.
+- Avoids unnecessary dependencies.
+- Allows official SDKs or client libraries when they provide clear advantages.
+- Prevents infrastructure decisions from leaking into the domain layer.
+- Aligns with the Constitution principles of Provider-Based Architecture and Interface Independence.
+
+### Guidelines
+
+Prefer:
+
+- Go standard library
+- Official SDKs
+- Official client libraries
+- Well-established libraries with strong community adoption
+
+Avoid:
+
+- Dependencies that only save a few lines of code
+- Unmaintained libraries
+- Scraping unofficial websites
+- Libraries that couple business logic to infrastructure
 
 ---
 
-## Config File Format
+# Blockchain Integration Strategy
 
-### Decision
-JSON format for wallet configuration.
+## Decision
+
+Use the most stable official integration mechanism available for each supported protocol.
+
+- **Aave** → Direct smart contract interaction through Ethereum JSON-RPC.
+- **Kamino** → Official REST API or official SDK whenever sufficient.
+- Keep protocol-specific communication completely encapsulated inside provider implementations.
 
 ### Rationale
-- `encoding/json` is in the Go standard library — zero external dependencies
-- Simple to parse, well-understood, easy to generate manually
-- Sufficient expressiveness for wallet lists and provider mappings
-- Aligns with "prefer standard Go libraries" directive
+
+Different protocols expose different integration models.
+
+Rather than forcing every provider to use raw RPC, each provider should use the most stable and maintainable official interface.
+
+The domain layer should remain completely unaware of whether data came from:
+
+- JSON-RPC
+- REST
+- SDK
+- GraphQL
+- Future protocol integrations
+
+---
+
+# Configuration File Format
+
+## Decision
+
+Use JSON as the configuration format.
+
+## Rationale
+
+- Supported by the Go standard library (`encoding/json`)
+- No additional dependency required
+- Easy validation
+- Easy generation
+- Sufficient for MVP
 
 ### Alternatives Considered
-- **YAML**: Requires `gopkg.in/yaml.v3` dependency; more complex parsing rules
-- **TOML**: Requires third-party library; less familiar to most users
-- **HCL**: Requires third-party library; over-engineered for flat wallet configs
-- **Environment variables**: Impractical for multi-wallet config; harder to validate
 
-### Format Design
+### YAML
+
+Pros:
+
+- More human friendly
+
+Cons:
+
+- Requires external dependency
+
+### TOML
+
+Pros:
+
+- Readable
+
+Cons:
+
+- Requires external dependency
+
+### Environment Variables
+
+Rejected because multi-wallet configuration becomes difficult to manage.
+
+## Example
+
 ```json
 {
   "rpc_endpoints": {
@@ -46,16 +112,16 @@ JSON format for wallet configuration.
   },
   "positions": [
     {
-      "alias": "my-aave-wallet",
-      "address": "0x...",
+      "alias": "Main Aave",
+      "provider": "aave",
       "network": "ethereum",
-      "protocol": "aave"
+      "address": "0x..."
     },
     {
-      "alias": "my-kamino-wallet",
-      "address": "...",
+      "alias": "Main Kamino",
+      "provider": "kamino",
       "network": "solana",
-      "protocol": "kamino"
+      "address": "..."
     }
   ]
 }
@@ -63,79 +129,250 @@ JSON format for wallet configuration.
 
 ---
 
-## Aave Health Factor Retrieval
+# Aave Health Factor Retrieval
 
-### Decision
-Call `getUserAccountData` via `eth_call` on the Aave V2/V3 Pool contract.
+## Decision
+
+Retrieve Health Factor directly from the Aave Pool contract using Ethereum JSON-RPC (`eth_call`).
+
+### Method
+
+```
+getUserAccountData(address)
+```
 
 ### Rationale
-- `getUserAccountData` returns `(totalCollateralBase, totalDebtBase, availableBorrowsBase, currentLiquidationThreshold, ltv, healthFactor)` in a single call
-- Health Factor is returned directly as a uint256 scaled by 1e18
-- No event log scanning or state reconstruction needed
-- Works for both Aave V2 and V3 (slight contract address difference)
+
+- Official Aave interface
+- Single blockchain call
+- Returns Health Factor directly
+- No state reconstruction required
+- Stable across Aave versions
 
 ### Implementation Notes
-- Aave V3 Ethereum Pool: `0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2`
-- `getUserAccountData` selector: `0x5c7783a3`
-- Input: user address (32-byte padded)
-- Output: decode 6 uint256 values from RLP (healthFactor is index 5)
+
+Pool Contract (Ethereum V3):
+
+```
+0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2
+```
+
+Returned values:
+
+- totalCollateralBase
+- totalDebtBase
+- availableBorrowsBase
+- currentLiquidationThreshold
+- ltv
+- healthFactor
+
+Health Factor is returned already calculated (scaled by 1e18).
 
 ---
 
-## Kamino Health Factor Retrieval
+# Kamino Health Factor Retrieval
 
-### Decision
-Call `getUserAccount` via the Kamino lending program on Solana.
+## Decision
+
+Prefer Kamino's official interfaces instead of manually decoding Solana account layouts.
+
+Preferred integration order:
+
+1. Official REST API
+2. Official SDK
+3. Direct Solana RPC
 
 ### Rationale
-- Kamino stores user account data in Program Derived Addresses (PDAs)
-- Each user position has an on-chain account with a `healthFactor` field
-- Solana getAccountInfo returns the raw account data buffer
-- Parse the account structure using known field offsets
+
+- Recommended by Kamino documentation
+- Lower maintenance cost
+- Less protocol-specific parsing
+- More resilient to protocol upgrades
+- Easier testing
+- Cleaner implementation
 
 ### Implementation Notes
-- Kamino program ID: `KLend...` (specific Kamino lending program ID)
-- Derive PDA using user wallet pubkey and market/obligation seeds
-- Account data layout contains health factor as a `u128` (16 bytes) at a known offset
-- Need to confirm exact account structure with Kamino IDL or source
+
+The provider should retrieve user lending obligations through Kamino's official interfaces.
+
+Health Factor should be derived from the returned obligation data.
+
+Only use direct RPC if official interfaces cannot satisfy the application's requirements.
+
+Manual parsing of account offsets should be treated as a last resort.
 
 ---
 
-## Health Classification Thresholds
+# Provider Architecture
 
-### Decision
-Three-tier classification with configurable thresholds:
-| Classification | Range | Visual |
-|---------------|-------|--------|
-| Safe | > 1.5 | Green |
-| Warning | 1.0 – 1.5 | Yellow |
-| Critical | ≤ 1.0 | Red |
+## Decision
 
-### Rationale
-- Industry-standard thresholds used by Aave, Compound, and major DeFi position managers
-- 1.0 = liquidation boundary (universal across lending protocols)
-- 1.5 = common "safe" threshold; provides 50% buffer before liquidation
-- Configurable per FR-008, but these defaults match user expectations
+Separate business logic from transport mechanisms.
 
-### Alternatives Considered
-- **Single numeric output**: Fails User Story 4 (quick understanding)
-- **Continuous gradient**: More complex, harder to read in CLI output
-- **Protocol-specific thresholds**: Adds complexity; MVP should standardize
+Architecture:
+
+```
+Application
+
+↓
+
+Provider
+
+↓
+
+Data Source
+
+↓
+
+REST / RPC / SDK
+```
+
+Example:
+
+```
+AaveProvider
+
+↓
+
+EthereumRPCDataSource
+
+↓
+
+Ethereum JSON-RPC
+```
+
+```
+KaminoProvider
+
+↓
+
+KaminoAPIDataSource
+
+↓
+
+Official REST API
+```
+
+Responsibilities:
+
+### Provider
+
+- Business rules
+- Health Factor retrieval
+- Error handling
+- Result normalization
+
+### Data Source
+
+- HTTP
+- RPC
+- SDK interaction
+- Authentication
+- Serialization
 
 ---
 
-## Go Version — Feature Decisions
+# Health Classification
 
-### Decision
-Target Go 1.22. Use standard `flag` package for CLI parsing.
+## Decision
+
+Use configurable Health Factor classifications.
+
+Default thresholds:
+
+| Classification | Default Threshold |
+|----------------|-------------------|
+| Safe | > 1.5 |
+| Warning | > 1.0 and ≤ 1.5 |
+| Critical | ≤ 1.0 |
+
+Thresholds must be configurable.
 
 ### Rationale
-- Go 1.22 is the current stable release widely available in CI/CD and package managers
-- Standard `flag` avoids external CLI framework dependency
-- No need for advanced CLI features (subcommands, autocomplete) in MVP
-- `slog` package (Go 1.21+) available for structured logging if needed
 
-### Alternatives Considered
-- **Go 1.21**: Acceptable, but Go 1.22 is current
-- **spf13/cobra**: Adds dependency for CLI framework; not justified for single-command MVP
-- **spf13/viper**: Adds dependency for config loading; over-engineered for simple JSON file
+- Easy interpretation
+- Consistent CLI output
+- Satisfies specification requirements
+- Allows future customization
+
+---
+
+# Go Version
+
+## Decision
+
+Target the latest stable Go release supported by the project.
+
+### Rationale
+
+- Latest language improvements
+- Better performance
+- Better tooling
+- Longer support lifecycle
+
+---
+
+# CLI Framework
+
+## Decision
+
+Use the Go standard `flag` package.
+
+### Rationale
+
+The MVP contains a single command with few options.
+
+No advanced CLI framework is currently justified.
+
+---
+
+# Dependency Policy
+
+## Decision
+
+Do not enforce a "Zero External Dependencies" rule.
+
+Instead:
+
+- Prefer the Go standard library.
+- Introduce dependencies only when they provide significant value.
+- Prefer official SDKs and official client libraries when available.
+- Evaluate each dependency based on maintainability, stability, and architectural impact.
+
+### Examples of Acceptable Dependencies
+
+- Official blockchain SDKs
+- Official protocol SDKs
+- Well-established Go libraries
+- Widely adopted community libraries
+
+### Examples of Unacceptable Dependencies
+
+- Libraries that only reduce a few lines of code
+- Unmaintained projects
+- Scraping libraries for unofficial websites
+- Libraries that couple business logic to infrastructure
+
+---
+
+# Future Evolution
+
+The Provider abstraction allows adding new protocols without modifying the application layer.
+
+Potential future providers:
+
+- Morpho
+- Compound
+- Spark
+- Venus
+- Radiant
+- MarginFi
+
+Each provider may internally choose the most appropriate integration mechanism:
+
+- REST
+- JSON-RPC
+- SDK
+- GraphQL
+
+The application layer remains completely independent of these implementation details.
