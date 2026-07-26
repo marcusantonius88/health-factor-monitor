@@ -18,7 +18,7 @@ All paths below are relative to repository root: `/home/marcus/projects/health-f
 
 **Purpose**: Project initialization, directory structure, and test fixtures
 
-- [ ] T001 Initialize Go module at project root with `go mod init github.com/marcus/health-factor-monitor` and create directory structure per plan.md (`cmd/hfmon/`, `internal/domain/`, `internal/application/`, `internal/infrastructure/aave/`, `internal/infrastructure/kamino/`, `internal/infrastructure/config/`, `internal/interfaces/cli/`, `tests/integration/`, `tests/testdata/`)
+- [x] T001 Initialize Go module at project root with `go mod init github.com/marcus/health-factor-monitor` and create directory structure per plan.md (`cmd/hfmon/`, `internal/domain/`, `internal/application/`, `internal/infrastructure/aave/`, `internal/infrastructure/kamino/`, `internal/infrastructure/config/`, `internal/interfaces/cli/`, `tests/integration/`, `tests/testdata/`)
 - [ ] T002 [P] Create sample testdata config file at `tests/testdata/valid-config.json` with valid dummy RPC endpoints and two positions (one Aave/Ethereum, one Kamino/Solana) matching the JSON format from `contracts/config-contract.md`
 
 ---
