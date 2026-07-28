@@ -27,7 +27,7 @@ All paths below are relative to repository root: `/home/marcus/projects/health-f
 
 **Purpose**: Core domain types and interface contracts that all user stories depend on. MUST complete before any user story phase.
 
-- [ ] T003 [P] Define Wallet and LendingPosition domain entities in `internal/domain/wallet.go` with fields and validation per `data-model.md`
+- [x] T003 [P] Define Wallet and LendingPosition domain entities in `internal/domain/wallet.go` with fields and validation per `data-model.md`
 - [ ] T004 [P] Define HealthFactor domain entity (Value float64, Classification string) and ProviderResult struct (Position, HealthFactor pointer, Error string) in `internal/domain/healthfactor.go` per `data-model.md`
 - [ ] T005 [P] Define HealthFactorProvider interface (Protocol(), Network(), GetHealthFactor(ctx, address)) in `internal/domain/provider.go` per `contracts/provider-interface.md`
 - [ ] T006 [P] Define Config struct (RPCEndpoints map, Positions slice) and ConfigLoader interface (Load()) in `internal/domain/config.go` per `contracts/config-contract.md`
