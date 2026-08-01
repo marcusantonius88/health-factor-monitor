@@ -31,7 +31,7 @@ All paths below are relative to repository root: `/home/marcus/projects/health-f
 - [x] T004 [P] Define HealthFactor domain entity (Value float64, classification string) and ProviderResult struct (Position, HealthFactor pointer, Error string) in `internal/domain/healthfactor.go` per `data-model.md`
 - [x] T005 [P] Define HealthFactorProvider interface (Protocol(), Network(), GetHealthFactor(ctx, address)) in `internal/domain/provider.go` per `contracts/provider-interface.md`
 - [x] T006 [P] Define Config struct (RPCEndpoints map, Positions slice) and ConfigLoader interface (Load()) in `internal/domain/config.go` per `contracts/config-contract.md`
-- [ ] T007 Write table-driven unit tests for all domain entities, ProviderResult validation (exactly one of HealthFactor or Error), and HealthFactorProvider interface in `internal/domain/domain_test.go`
+- [x] T007 Write table-driven unit tests for all domain entities, ProviderResult validation (exactly one of HealthFactor or Error), and HealthFactorProvider interface in `internal/domain/domain_test.go`
 
 **Checkpoint**: Foundation ready — entities, ports, and shared types defined and tested.
 
