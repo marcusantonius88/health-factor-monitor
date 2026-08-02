@@ -45,7 +45,7 @@ All paths below are relative to repository root: `/home/marcus/projects/health-f
 
 ### Implementation for User Story 2
 
-- [ ] T008 [P] [US2] Write config reader unit tests in `internal/infrastructure/config/reader_test.go` covering valid config, missing file, malformed JSON, unsupported protocol, missing required field, invalid address format
+- [x] T008 [P] [US2] Write config reader unit tests in `internal/infrastructure/config/reader_test.go` covering valid config, missing file, malformed JSON, unsupported protocol, missing required field, invalid address format
 - [ ] T009 [US2] Implement JSON config file loader in `internal/infrastructure/config/reader.go` — parse `config.json`, populate Config struct, return error for I/O failures
 - [ ] T010 [US2] Implement config validation rules in `internal/infrastructure/config/reader.go` — validate at least one RPC endpoint, position address format (Ethereum 0x-prefixed hex, Solana base58), supported protocol+network combos, non-empty alias
 - [ ] T011 [US2] Wire ConfigLoader into CLI app entry point in `cmd/hfmon/main.go` — parse `-config` flag, load and validate config on startup, print error and exit(1) on failure
