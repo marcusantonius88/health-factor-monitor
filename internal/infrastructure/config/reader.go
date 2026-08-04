@@ -33,8 +33,9 @@ func NewReader(path string) *Reader {
 	return &Reader{path: path}
 }
 
-// Load reads, parses, and populates the configuration from the configured
-// path. It returns an error if the file cannot be read or parsed as JSON.
+// Load reads, parses, populates, and validates the configuration from the
+// configured path. It returns an error if the file cannot be read, cannot be
+// parsed as JSON, or fails domain validation.
 func (r *Reader) Load() (*domain.Config, error) {
 	data, err := os.ReadFile(r.path)
 	if err != nil {
@@ -46,7 +47,12 @@ func (r *Reader) Load() (*domain.Config, error) {
 		return nil, fmt.Errorf("cannot parse config file %q: %w", r.path, err)
 	}
 
-	return toDomainConfig(fc), nil
+	cfg := toDomainConfig(fc)
+	if err := cfg.Validate(); err != nil {
+		return nil, fmt.Errorf("invalid config file %q: %w", r.path, err)
+	}
+
+	return cfg, nil
 }
 
 // toDomainConfig converts the flat file format into the domain Config,
