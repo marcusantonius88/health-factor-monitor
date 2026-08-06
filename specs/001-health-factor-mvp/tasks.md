@@ -62,7 +62,7 @@ All paths below are relative to repository root: `/home/marcus/projects/health-f
 
 ### Tests for User Story 1
 
-- [ ] T012 [P] [US1] Write Aave provider unit tests in `internal/infrastructure/aave/provider_test.go` with a mock HTTP server returning realistic `getUserAccountData` responses, covering success, timeout, and malformed response
+- [x] T012 [P] [US1] Write Aave provider unit tests in `internal/infrastructure/aave/provider_test.go` with a mock HTTP server returning realistic `getUserAccountData` responses, covering success, timeout, and malformed response
 - [ ] T013 [P] [US3] Write CheckService unit tests in `internal/application/service_test.go` covering: all providers succeed, one provider fails (verify partial results), all providers fail (verify all errors returned), unknown protocol (verify error returned)
 
 ### Implementation for User Story 1 (includes US3 resilience + US4 classification)
