@@ -63,17 +63,17 @@ All paths below are relative to repository root: `/home/marcus/projects/health-f
 ### Tests for User Story 1
 
 - [x] T012 [P] [US1] Write Aave provider unit tests in `internal/infrastructure/aave/provider_test.go` with a mock HTTP server returning realistic `getUserAccountData` responses, covering success, timeout, and malformed response
-- [ ] T013 [P] [US3] Write CheckService unit tests in `internal/application/service_test.go` covering: all providers succeed, one provider fails (verify partial results), all providers fail (verify all errors returned), unknown protocol (verify error returned)
+- [x] T013 - [P] [US3] Write CheckService unit tests in `internal/application/service_test.go` covering: all providers succeed, one provider fails (verify partial results), all providers fail (verify all errors returned), unknown protocol (verify error returned)
 
 ### Implementation for User Story 1 (includes US3 resilience + US4 classification)
 
-- [ ] T014 [P] [US1] Implement Aave provider adapter in `internal/infrastructure/aave/provider.go` — `Protocol()` returns "aave", `Network()` returns "ethereum", `GetHealthFactor()` calls `eth_call` to `getUserAccountData` on the Aave V3 Pool contract, decodes the 6-uint256 response, extracts healthFactor at index 5, converts from 1e18 scaling to float64
-- [ ] T015 [P] [US4] Implement HealthFactor classification logic in `internal/domain/healthfactor.go` — `Classify(value float64, thresholds ...)` returns "safe" (>1.5), "warning" (1.0–1.5), "critical" (≤1.0) with configurable thresholds; write tests alongside
-- [ ] T016 [US1] Implement CheckService in `internal/application/service.go` — `NewCheckService(config, providers map)` matching providers to positions by protocol+network, `CheckAll(ctx)` iterates all positions, calls matched provider's `GetHealthFactor`, wraps result in `ProviderResult`, never panics on unmatched protocol, never stops on individual errors
-- [ ] T017 [US3] Implement error handling in `internal/application/service.go` — ensure CheckService processes all positions even when individual providers return errors or timeouts; each position gets exactly one ProviderResult (success or error)
-- [ ] T018 [US1] Implement CLI output formatting in `internal/interfaces/cli/app.go` — `FormatResults(results)` renders aligned table with columns: Position, Protocol, Network, Health Factor, Status; includes classification labels; handles both success and error results
-- [ ] T019 [US3] Implement CLI exit code logic in `internal/interfaces/cli/app.go` — exit(0) if at least one HF retrieved, exit(1) if all positions failed; wire into main flow
-- [ ] T020 [US1] Wire complete application in `cmd/hfmon/main.go` — init config loader, init providers (Aave only for MVP), init CheckService, call CheckAll, format and print results, set exit code
+- [x] T014 [P] [US1] Implement Aave provider adapter in `internal/infrastructure/aave/provider.go` — `Protocol()` returns "aave", `Network()` returns "ethereum", `GetHealthFactor()` calls `eth_call` to `getUserAccountData` on the Aave V3 Pool contract, decodes the 6-uint256 response, extracts healthFactor at index 5, converts from 1e18 scaling to float64
+- [x] T015 [P] [US4] Implement HealthFactor classification logic in `internal/domain/healthfactor.go` — `Classify(value float64, thresholds ...)` returns "safe" (>1.5), "warning" (1.0–1.5), "critical" (≤1.0) with configurable thresholds; write tests alongside
+- [x] T016 [US1] Implement CheckService in `internal/application/service.go` — `NewCheckService(config, providers map)` matching providers to positions by protocol+network, `CheckAll(ctx)` iterates all positions, calls matched provider's `GetHealthFactor`, wraps result in `ProviderResult`, never panics on unmatched protocol, never stops on individual errors
+- [x] T017 [US3] Implement error handling in `internal/application/service.go` — ensure CheckService processes all positions even when individual providers return errors or timeouts; each position gets exactly one ProviderResult (success or error)
+- [x] T018 [US1] Implement CLI output formatting in `internal/interfaces/cli/app.go` — `FormatResults(results)` renders aligned table with columns: Position, Protocol, Network, Health Factor, Status; includes classification labels; handles both success and error results
+- [x] T019 [US3] Implement CLI exit code logic in `internal/interfaces/cli/app.go` — exit(0) if at least one HF retrieved, exit(1) if all positions failed; wire into main flow
+- [x] T020 [US1] Wire complete application in `cmd/hfmon/main.go` — init config loader, init providers (Aave only for MVP), init CheckService, call CheckAll, format and print results, set exit code
 
 **Checkpoint**: MVP functional. `go build ./cmd/hfmon` succeeds. Running with valid Aave config prints table with HF and classification. Running with bad RPC shows error for that provider and still exits 0 if others succeed.
 

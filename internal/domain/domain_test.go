@@ -365,3 +365,47 @@ func TestHealthFactorProviderContract(t *testing.T) {
 		})
 	}
 }
+
+func TestClassify(t *testing.T) {
+	tests := []struct {
+		name       string
+		value      float64
+		thresholds []float64
+		want       string
+	}{
+		{name: "safe above default", value: 2.5, want: ClassificationSafe},
+		{name: "safe above default boundary", value: 2.0, want: ClassificationSafe},
+		{name: "warning at safe boundary", value: 1.5, want: ClassificationWarning},
+		{name: "warning at upper bound", value: 1.4, want: ClassificationWarning},
+		{name: "warning just above critical", value: 1.01, want: ClassificationWarning},
+		{name: "critical at critical max", value: 1.0, want: ClassificationCritical},
+		{name: "critical below default", value: 0.9, want: ClassificationCritical},
+		{name: "critical at zero", value: 0, want: ClassificationCritical},
+		{
+			name:       "custom thresholds safe",
+			value:      3.5,
+			thresholds: []float64{3.0, 2.0},
+			want:       ClassificationSafe,
+		},
+		{
+			name:       "custom thresholds warning",
+			value:      2.5,
+			thresholds: []float64{3.0, 2.0},
+			want:       ClassificationWarning,
+		},
+		{
+			name:       "custom thresholds critical",
+			value:      2.0,
+			thresholds: []float64{3.0, 2.1},
+			want:       ClassificationCritical,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := Classify(tt.value, tt.thresholds...); got != tt.want {
+				t.Errorf("Classify(%v) = %q, want %q", tt.value, got, tt.want)
+			}
+		})
+	}
+}
