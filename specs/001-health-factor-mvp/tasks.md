@@ -89,7 +89,7 @@ All paths below are relative to repository root: `/home/marcus/projects/health-f
 
 - [x] T021 [P] [US1] Write Kamino provider unit tests in `internal/infrastructure/kamino/provider_test.go` with mock responses covering success, API error, and timeout
 - [x] T022 [P] [US1] Implement Kamino provider adapter in `internal/infrastructure/kamino/provider.go` — `Protocol()` returns "kamino", `Network()` returns "solana", `GetHealthFactor()` calls Kamino's official API/REST interface to retrieve user obligation data, derives Health Factor from returned data
-- [ ] T023 [US1] Register Kamino provider in `cmd/hfmon/main.go` — add Kamino provider to the provider map alongside Aave; no other code changes needed
+- [x] T023 [US1] Register Kamino provider in `cmd/hfmon/main.go` — add Kamino provider to the provider map alongside Aave; no other code changes needed
 - [ ] T024 [US1] Validate both providers end-to-end: run with config containing both Aave and Kamino positions, verify output displays both with correct HFs
 
 **Checkpoint**: Both providers work. `go test ./internal/infrastructure/kamino/...` passes. Output shows both protocols side by side.

@@ -10,6 +10,7 @@ import (
 	"github.com/marcus/health-factor-monitor/internal/domain"
 	"github.com/marcus/health-factor-monitor/internal/infrastructure/aave"
 	"github.com/marcus/health-factor-monitor/internal/infrastructure/config"
+	"github.com/marcus/health-factor-monitor/internal/infrastructure/kamino"
 	"github.com/marcus/health-factor-monitor/internal/interfaces/cli"
 )
 
@@ -51,14 +52,25 @@ func run(ctx context.Context) error {
 	return fmt.Errorf("no health factors could be retrieved for any position")
 }
 
-// buildProviders wires the provider adapters for the MVP. For now only the
-// Aave provider is available, registered against the ethereum RPC endpoint.
+// buildProviders wires the provider adapters for the MVP: Aave against the
+// ethereum RPC endpoint and Kamino against its public API base URL. Providers
+// are registered only when the governing network is configured.
 func buildProviders(cfg domain.Config) map[string]domain.HealthFactorProvider {
 	providers := map[string]domain.HealthFactorProvider{}
 	if endpoint, ok := cfg.RPCEndpoints[domain.NetworkEthereum]; ok {
-		providers[aaveProtocolKey] = aave.NewProvider(endpoint)
+		providers[protocolNetworkKey(domain.ProtocolAave, domain.NetworkEthereum)] = aave.NewProvider(endpoint)
+	}
+	if _, ok := cfg.RPCEndpoints[domain.NetworkSolana]; ok {
+		providers[protocolNetworkKey(domain.ProtocolKamino, domain.NetworkSolana)] = kamino.NewProvider(kaminoAPIBaseURL)
 	}
 	return providers
 }
 
-const aaveProtocolKey = "aave:ethereum"
+// kaminoAPIBaseURL is the base URL of the Kamino public API.
+const kaminoAPIBaseURL = "https://api.kamino.finance"
+
+// protocolNetworkKey builds the "protocol:network" map key used to match
+// providers to positions.
+func protocolNetworkKey(protocol, network string) string {
+	return protocol + ":" + network
+}
