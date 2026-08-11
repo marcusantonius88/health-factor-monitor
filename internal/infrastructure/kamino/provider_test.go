@@ -170,6 +170,81 @@ func TestGetHealthFactorErrors(t *testing.T) {
 	}
 }
 
+func TestGetHealthFactorSkipsSupplyOnlyPosition(t *testing.T) {
+	body := fmt.Sprintf(`{
+  "wallet": %q,
+  "lending": [
+    {
+      "market": "supply-only-market",
+      "obligation": "11111111111111111111111111111111",
+      "tag": "Vanilla",
+      "netValue": "1000.0",
+      "totalDepositValue": "1000.0",
+      "totalBorrowValue": "0.0",
+      "ltv": "0",
+      "maxLtv": "0.75",
+      "liquidationLtv": "0.75",
+      "leverage": "1.0"
+    },
+    {
+      "market": "borrow-market",
+      "obligation": "22222222222222222222222222222222",
+      "tag": "Vanilla",
+      "netValue": "10000.0",
+      "totalDepositValue": "20000.0",
+      "totalBorrowValue": "12800.0",
+      "ltv": "0.64",
+      "maxLtv": "0.75",
+      "liquidationLtv": "0.8",
+      "leverage": "1.0"
+    }
+  ]
+}`, userAddress)
+
+	_, provider := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(body))
+	})
+
+	got, err := provider.GetHealthFactor(context.Background(), userAddress)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if math.Abs(got.Value-1.25) > 1e-9 {
+		t.Errorf("Value = %v, want 1.25", got.Value)
+	}
+	if got.Classification != domain.ClassificationWarning {
+		t.Errorf("Classification = %q, want %q", got.Classification, domain.ClassificationWarning)
+	}
+}
+
+func TestGetHealthFactorOnlySupplyOnlyPositions(t *testing.T) {
+	body := fmt.Sprintf(`{
+  "wallet": %q,
+  "lending": [
+    {
+      "market": "supply-only-market",
+      "obligation": "11111111111111111111111111111111",
+      "tag": "Vanilla",
+      "netValue": "1000.0",
+      "totalDepositValue": "1000.0",
+      "totalBorrowValue": "0.0",
+      "ltv": "0",
+      "maxLtv": "0.75",
+      "liquidationLtv": "0.75",
+      "leverage": "1.0"
+    }
+  ]
+}`, userAddress)
+
+	_, provider := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(body))
+	})
+
+	if _, err := provider.GetHealthFactor(context.Background(), userAddress); err == nil {
+		t.Fatal("expected error for supply-only position, got nil")
+	}
+}
+
 func TestProviderRequestsPortfolioEndpoint(t *testing.T) {
 	var capturedPath string
 

@@ -17,7 +17,7 @@ import (
 const (
 	poolContract = "0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2"
 	userAddress  = "0x0000000000000000000000000000000000000001"
-	selector     = "0x5c7783a3"
+	selector     = "0xbf92857c"
 )
 
 func hexUint256(t *testing.T, v int64) string {

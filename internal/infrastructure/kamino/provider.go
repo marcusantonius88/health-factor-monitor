@@ -103,15 +103,23 @@ func (p *Provider) GetHealthFactor(ctx context.Context, address string) (*domain
 		return nil, errors.New("no lending positions found for address")
 	}
 
-	value, err := deriveHealthFactor(parsed.Lending[0])
-	if err != nil {
-		return nil, err
+	// A wallet may hold several obligations; pick the first with an active
+	// borrow (ltv > 0). Supply-only positions have ltv 0 and must be skipped.
+	for _, position := range parsed.Lending {
+		if !hasActiveBorrow(position) {
+			continue
+		}
+		value, err := deriveHealthFactor(position)
+		if err != nil {
+			return nil, err
+		}
+		return &domain.HealthFactor{
+			Value:          value,
+			Classification: domain.Classify(value),
+		}, nil
 	}
 
-	return &domain.HealthFactor{
-		Value:          value,
-		Classification: domain.Classify(value),
-	}, nil
+	return nil, errors.New("no active borrow position found for address")
 }
 
 // deriveHealthFactor computes the health factor for a lending position. The
@@ -130,6 +138,16 @@ func deriveHealthFactor(pos portfolioLendingPosition) (float64, error) {
 		return 0, errors.New("ltv must be positive")
 	}
 	return liquidationLtv / ltv, nil
+}
+
+// hasActiveBorrow reports whether the lending position carries debt, i.e. it
+// has a positive ltv. Supply-only positions expose ltv 0 and are not borrows.
+func hasActiveBorrow(pos portfolioLendingPosition) bool {
+	ltv, err := parseDecimal(pos.Ltv)
+	if err != nil {
+		return false
+	}
+	return ltv > 0
 }
 
 // parseDecimal converts a decimal string (e.g., "0.8") to a float64. An empty

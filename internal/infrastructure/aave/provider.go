@@ -21,7 +21,7 @@ const (
 	poolContract = "0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2"
 
 	// getUserAccountDataSelector is the function selector for getUserAccountData(address).
-	getUserAccountDataSelector = "0x5c7783a3"
+	getUserAccountDataSelector = "0xbf92857c"
 
 	// healthFactorIndex is the position of healthFactor in the returned tuple.
 	healthFactorIndex = 5
@@ -139,7 +139,9 @@ func (p *Provider) GetHealthFactor(ctx context.Context, address string) (*domain
 
 // getUserAccountSelectorCallData builds the calldata for getUserAccountData(address).
 func getUserAccountSelectorCallData(address string) string {
-	return getUserAccountDataSelector + strings.TrimPrefix(strings.ToLower(address), "0x")
+	// The address argument is ABI-encoded as a 32-byte left-padded word.
+	padded := strings.Repeat("0", 64-len(strings.TrimPrefix(address, "0x"))) + strings.ToLower(strings.TrimPrefix(address, "0x"))
+	return getUserAccountDataSelector + padded
 }
 
 // extractHealthFactor decodes the ABI-encoded 6-tuple result and returns the
