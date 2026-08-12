@@ -2,208 +2,290 @@
 
 # Health Factor Monitor
 
-**Monitor DeFi lending positions across multiple protocols from your terminal.**
+**Monitor de posições de crédito descentralizado em Aave e Kamino diretamente pelo terminal.**
 
-*A provider-based, extensible CLI built with Go and developed using Spec-Driven Development (SDD).*
+Uma CLI em Go para consultar Health Factor de posições de lending, classificar risco e exibir resultados de forma clara, com tolerância a falhas e arquitetura extensível por providers.
 
 </div>
 
 ---
 
-## 📖 Overview
+## 🎯 Problema
 
-Health Factor Monitor is a command-line application written in Go that monitors the **Health Factor** of lending positions across multiple DeFi protocols.
+No ecossistema DeFi, o Health Factor é um indicador central para avaliar o risco de uma posição de crédito. Em protocolos como Aave e Kamino, a saúde da posição pode mudar rapidamente conforme condições de mercado, volatilidade e uso de alavancagem.
 
-The project is designed around a **provider-based architecture**, making it straightforward to support additional protocols without changing the application's core.
+Para usuários que operam com múltiplas posições e protocolos, acompanhar esse dado manualmente costuma ser lento, inconsistente e sujeito a falhas de integração.
 
-The initial MVP focuses on:
+O Health Factor Monitor nasceu para resolver esse problema, trazendo uma experiência simples e automatizada para:
+
+- consultar posições configuradas em JSON;
+- validar endpoints e endereços antes da execução;
+- consultar protocolos distintos em um único fluxo;
+- exibir resultado em tabela legível no terminal;
+- manter robustez mesmo quando alguns providers falham.
+
+---
+
+## 🚀 MVP entregue
+
+O MVP já foi implementado com foco em produtividade e confiabilidade.
+
+### Funcionalidades atuais
+
+- suporte a Aave na rede Ethereum;
+- suporte a Kamino na rede Solana;
+- carregamento e validação de configuração via JSON;
+- verificação de endpoints RPC e endereços de carteira;
+- classificação do Health Factor em:
+  - safe
+  - warning
+  - critical
+- execução por protocolo ou por todas as posições configuradas;
+- tolerância a falhas por posição;
+- saída tabular no terminal com status e erro detalhado;
+- exit code apropriado quando há sucesso parcial ou falha total.
+
+### Como a aplicação funciona
+
+A CLI lê um arquivo de configuração, valida os dados informados e então consulta cada posição com o provider correspondente.
+
+Se uma posição falhar por timeout, RPC inválida ou resposta malformada, o restante continua sendo processado sem interromper a execução do programa.
+
+---
+
+## 🏗️ Arquitetura
+
+A aplicação foi desenhada com separação clara de responsabilidades entre domínio, aplicação e infraestrutura.
+
+```text
+                 +----------------------+
+                 |        CLI           |
+                 |      hfmon           |
+                 +----------+-----------+
+                            |
+                            v
+                 +----------------------+
+                 |   Check Service      |
+                 |  orchestration       |
+                 +----------+-----------+
+                            |
+            +---------------+----------------+
+            |                                |
+            v                                v
+  +-------------------+        +----------------------+
+  | Aave Provider     |        | Kamino Provider      |
+  | Ethereum RPC      |        | Kamino API           |
+  +-------------------+        +----------------------+
+            |
+            v
+  +-------------------+
+  | Domain / Models   |
+  | Config / Provider |
+  | HealthFactor      |
+  +-------------------+
+```
+
+### Camadas
+
+- Domain: entidades e regras de negócio, como Config, HealthFactor, ProviderResult e classificação de risco.
+- Application: orchestrator responsável por mapear posições para providers e tratar falhas de forma resiliente.
+- Infrastructure: adapters para Aave e Kamino, além do carregador de configuração JSON.
+- Interface: CLI que monta as saídas em formato legível e define códigos de saída.
+
+### Principais contratos
+
+A arquitetura segue o padrão de provider interface, permitindo adicionar novos protocolos sem acoplar a lógica do serviço à implementação concreta de cada protocolo.
+
+---
+
+## ⚙️ Stack tecnológica
+
+### Linguagem e runtime
+
+- Go
+- CLI terminal-first
+
+### Protocolos suportados
 
 - Aave (Ethereum)
 - Kamino (Solana)
 
-Future providers can be added by implementing the same provider interface.
+### Integrações e formatos
+
+- JSON-RPC para Ethereum
+- REST API para Kamino
+- validação de endereços Ethereum e Solana
+- leitura de configurações em JSON
+
+### Testes
+
+- testes unitários por domínio, providers e service
+- validação de comportamento em cenários de sucesso, timeout e erro
+- cobertura de regras de classificação, configuração e recuperação de falhas
 
 ---
 
-## ✨ Goals
+## 🚀 Como usar
 
-- Simple and fast CLI experience
-- Clean Architecture principles
-- Provider-based design
-- Easy protocol extensibility
-- Reliable error handling
-- Production-quality Go code
-- Testable components
-- Incremental development through Spec-Driven Development
+### 1. Configuração
 
----
+Crie um arquivo de configuração com posições e RPC endpoints.
 
-## 🏗️ Architecture
-
-The application follows a layered architecture that separates domain logic from protocol implementations.
-
-```text
-                 +--------------------+
-                 |     CLI (hfmon)    |
-                 +---------+----------+
-                           |
-                           v
-                 +--------------------+
-                 |    Check Service   |
-                 +---------+----------+
-                           |
-             +-------------+-------------+
-             |                           |
-             v                           v
-      Aave Provider              Kamino Provider
-             |                           |
-             v                           v
-     Ethereum RPC/API            Solana RPC/API
+```json
+{
+  "rpc_endpoints": {
+    "ethereum": "https://mainnet.example-rpc.com",
+    "solana": "https://api.mainnet-beta.solana.com"
+  },
+  "positions": [
+    {
+      "protocol": "aave",
+      "network": "ethereum",
+      "wallet": {
+        "address": "0x1234567890abcdef1234567890abcdef12345678",
+        "alias": "Main Wallet"
+      }
+    },
+    {
+      "protocol": "kamino",
+      "network": "solana",
+      "wallet": {
+        "address": "8v6GJfY...",
+        "alias": "Solana Position"
+      }
+    }
+  ]
+}
 ```
 
-Each protocol is responsible only for retrieving its own Health Factor.
+### 2. Execução
 
-The application layer orchestrates execution while remaining independent of blockchain-specific details.
+```bash
+go run ./cmd/hfmon -config ./config.json
+```
+
+### 3. Filtrar por protocolo
+
+```bash
+go run ./cmd/hfmon -config ./config.json -protocol aave
+```
+
+### 4. Exemplo de saída
+
+```text
+Position      Protocol   Network   Health Factor   Status
+Main Wallet   aave       ethereum  2.41             safe
+Solana Pos.   kamino     solana    1.22             warning
+```
 
 ---
 
-## 📁 Project Structure
+## 🧪 Validação e robustez
+
+A aplicação foi construída pensando em casos reais de falha operacional:
+
+- RPC inválida ou indisponível;
+- resposta malformada do provider;
+- timeout de consulta;
+- endereço inválido;
+- protocolo não suportado;
+- ausência de configuração ou dado obrigatório.
+
+Quando um item falha, o sistema registra o erro e continua processando o restante, sem quebrar a aplicação.
+
+---
+
+## 📁 Estrutura do projeto
 
 ```text
 cmd/
-└── hfmon/
-
+  hfmon/
 internal/
-├── application/
-├── domain/
-├── infrastructure/
-│   ├── aave/
-│   ├── kamino/
-│   └── config/
-└── interfaces/
-    └── cli/
+  application/
+  domain/
+  infrastructure/
+    aave/
+    kamino/
+    config/
+  interfaces/
+    cli/
 
 tests/
-├── integration/
-└── testdata/
+  integration/
+  testdata/
 
 specs/
 ```
 
 ---
 
-## 🚀 Current Status
+## 🧭 Documentação e especificação
 
-This project is currently under active development.
+O projeto foi desenvolvido com abordagem de engenharia guiada por especificação, com documentação formal armazenada em `specs/`.
 
-Current progress:
+A estrutura inclui:
 
-- ✅ Project bootstrap
-- ⏳ Domain model
-- ⏳ Configuration loader
-- ⏳ Aave provider
-- ⏳ CLI
-- ⏳ Kamino provider
-- ⏳ Integration tests
+- visão do produto;
+- objetivos e regras;
+- modelo de dados;
+- contratos de interfaces;
+- plano de implementação;
+- checklist de tarefas e critérios de aceitação.
+
+Essa abordagem permite que a solução evolua com clareza, rastreabilidade e menor risco de regressão.
+
+---
+
+## 🤖 Desenvolvimento Assistido por IA
+
+Este projeto foi construído utilizando práticas modernas de desenvolvimento assistido por IA, com foco em produtividade, qualidade e documentação técnica.
+
+| Categoria | Detalhe |
+| --- | --- |
+| IDE / Agent | OpenCode |
+| Modelo principal | DeepSeek V4 Flash Free |
+| Metodologia | Spec-Driven Development (SDD) |
+| Framework de especificação | Spec Kit |
+
+A utilização do OpenCode como ambiente de desenvolvimento e do DeepSeek V4 Flash Free como modelo principal permitiu acelerar a escrita de código, a revisão de arquitetura, a geração de testes e a organização da documentação técnica.
+
+A metodologia adotada foi o SDD, aplicada a partir do Spec Kit, disponível em https://github.com/github/spec-kit. Essa abordagem organiza o desenvolvimento em especificações, planejamento, validação e implementação incremental, mantendo o projeto alinhado com requisitos, arquitetura e critérios de aceitação.
+
+Em outras palavras, a solução foi pensada e construída com um fluxo de desenvolvimento estruturado: especificar primeiro, validar depois, implementar em pequenos ciclos e revisar continuamente.
 
 ---
 
 ## 🛣️ Roadmap
 
-### MVP
+### MVP concluído
 
-- [x] Project initialization
-- [ ] Domain model
-- [ ] Configuration management
-- [ ] Aave Health Factor provider
-- [ ] Health classification
-- [ ] CLI interface
-- [ ] Kamino provider
-- [ ] Integration tests
+- [x] inicialização do projeto
+- [x] modelo de domínio
+- [x] configuração JSON
+- [x] validação de endpoints e posições
+- [x] provider Aave
+- [x] provider Kamino
+- [x] classificação de health factor
+- [x] CLI com formato tabular
+- [x] robustez para falhas individuais
 
-### Future
+### Próximos passos
 
-- Additional lending protocols
-- Concurrent provider execution
-- Historical Health Factor tracking
-- Alerting system
-- Telegram integration
-- Metrics & observability
-- Export to JSON / CSV
-
----
-
-## 🧪 Development Process
-
-This project is being developed using **Spec-Driven Development (SDD)**.
-
-Instead of writing code first, every feature follows a structured engineering workflow:
-
-```text
-Specification
-        ↓
-Planning
-        ↓
-Research
-        ↓
-Task Breakdown
-        ↓
-Implementation
-        ↓
-Review
-        ↓
-Commit
-```
-
-Every implementation task is developed incrementally:
-
-1. Implement
-2. Validate
-3. Review
-4. Commit
-
-This approach keeps the architecture consistent and allows each feature to evolve independently.
+- [ ] testes de integração reais com RPC e APIs públicas
+- [ ] suporte a mais protocolos
+- [ ] execução concorrente por provider
+- [ ] histórico de observação de health factor
+- [ ] alertas e monitoramento contínuo
+- [ ] exportação de resultados para JSON/CSV
 
 ---
 
-## 📚 Documentation
+## 🔒 Status
 
-Project documentation is located under the `specs/` directory.
-
-It includes:
-
-- Product Specification
-- Implementation Plan
-- Technical Research
-- Data Model
-- Contracts
-- Task Breakdown
-
-These artifacts document not only **what** was built, but also **why** each architectural decision was made.
+Projeto em fase de MVP funcional, com arquitetura pronta para extensão e suporte a múltiplos protocolos.
 
 ---
 
-## 🛠️ Technologies
+## 📄 Licença
 
-- Go
-- JSON-RPC
-- Ethereum
-- Solana
-- Aave
-- Kamino
-- Spec Kit
-- OpenCode
-
----
-
-## 🤝 Contributing
-
-Contributions, suggestions, and discussions are always welcome.
-
-If you'd like to improve the project, feel free to open an issue or submit a pull request.
-
----
-
-## 📄 License
-
-This project is licensed under the MIT License.
+Este projeto está licenciado sob a licença MIT.
