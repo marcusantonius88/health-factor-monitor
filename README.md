@@ -219,24 +219,7 @@ specs/
 
 ---
 
-## 🧭 Documentação e especificação
-
-O projeto foi desenvolvido com abordagem de engenharia guiada por especificação, com documentação formal armazenada em `specs/`.
-
-A estrutura inclui:
-
-- visão do produto;
-- objetivos e regras;
-- modelo de dados;
-- contratos de interfaces;
-- plano de implementação;
-- checklist de tarefas e critérios de aceitação.
-
-Essa abordagem permite que a solução evolua com clareza, rastreabilidade e menor risco de regressão.
-
----
-
-## 🤖 Desenvolvimento Assistido por IA
+## � Desenvolvimento Assistido por IA
 
 Este projeto foi construído utilizando práticas modernas de desenvolvimento assistido por IA, com foco em produtividade, qualidade e documentação técnica.
 
@@ -252,6 +235,21 @@ A utilização do OpenCode como ambiente de desenvolvimento e do DeepSeek V4 Fla
 A metodologia adotada foi o SDD, aplicada a partir do Spec Kit, disponível em https://github.com/github/spec-kit. Essa abordagem organiza o desenvolvimento em especificações, planejamento, validação e implementação incremental, mantendo o projeto alinhado com requisitos, arquitetura e critérios de aceitação.
 
 Em outras palavras, a solução foi pensada e construída com um fluxo de desenvolvimento estruturado: especificar primeiro, validar depois, implementar em pequenos ciclos e revisar continuamente.
+
+### 🧭 Documentação e especificação
+
+O projeto foi desenvolvido com abordagem de engenharia guiada por especificação, com documentação formal armazenada em `specs/`.
+
+A estrutura inclui:
+
+- visão do produto;
+- objetivos e regras;
+- modelo de dados;
+- contratos de interfaces;
+- plano de implementação;
+- checklist de tarefas e critérios de aceitação.
+
+Essa abordagem permite que a solução evolua com clareza, rastreabilidade e menor risco de regressão.
 
 ---
 
