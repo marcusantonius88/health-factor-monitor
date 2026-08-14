@@ -18,11 +18,14 @@ Para usuários que operam com múltiplas posições e protocolos, acompanhar ess
 
 O Health Factor Monitor nasceu para resolver esse problema, trazendo uma experiência simples e automatizada para:
 
-- consultar posições configuradas em JSON;
-- validar endpoints e endereços antes da execução;
-- consultar protocolos distintos em um único fluxo;
-- exibir resultado em tabela legível no terminal;
-- manter robustez mesmo quando alguns providers falham.
+- Consultar posições configuradas em JSON;
+- Validar endpoints e endereços antes da execução;
+- Consultar protocolos distintos em um único fluxo;
+- Exibir resultado em tabela legível no terminal;
+- Manter robustez mesmo quando alguns providers falham.
+
+
+
 
 ---
 
@@ -32,18 +35,18 @@ O MVP já foi implementado com foco em produtividade e confiabilidade.
 
 ### Funcionalidades atuais
 
-- suporte a Aave na rede Ethereum;
-- suporte a Kamino na rede Solana;
-- carregamento e validação de configuração via JSON;
-- verificação de endpoints RPC e endereços de carteira;
-- classificação do Health Factor em:
-  - safe
-  - warning
-  - critical
-- execução por protocolo ou por todas as posições configuradas;
-- tolerância a falhas por posição;
-- saída tabular no terminal com status e erro detalhado;
-- exit code apropriado quando há sucesso parcial ou falha total.
+- Suporte a Aave na rede Ethereum;
+- Suporte a Kamino na rede Solana;
+- Carregamento e validação de configuração via JSON;
+- Verificação de endpoints RPC e endereços de carteira;
+- Classificação do Health Factor em:
+  - Safe
+  - Warning
+  - Critical
+- Execução por protocolo ou por todas as posições configuradas;
+- Tolerância a falhas por posição;
+- Saída tabular no terminal com status e erro detalhado;
+- Exit code apropriado quando há sucesso parcial ou falha total.
 
 ### Como a aplicação funciona
 
@@ -114,14 +117,14 @@ A arquitetura segue o padrão de provider interface, permitindo adicionar novos 
 
 - JSON-RPC para Ethereum
 - REST API para Kamino
-- validação de endereços Ethereum e Solana
-- leitura de configurações em JSON
+- Validação de endereços Ethereum e Solana
+- Leitura de configurações em JSON
 
 ### Testes
 
-- testes unitários por domínio, providers e service
-- validação de comportamento em cenários de sucesso, timeout e erro
-- cobertura de regras de classificação, configuração e recuperação de falhas
+- Testes unitários por domínio, providers e service
+- Validação de comportamento em cenários de sucesso, timeout e erro
+- Cobertura de regras de classificação, configuração e recuperação de falhas
 
 ---
 
@@ -182,14 +185,15 @@ Solana Pos.   kamino     solana    1.22             warning
 
 ## 🧪 Validação e robustez
 
+
 A aplicação foi construída pensando em casos reais de falha operacional:
 
 - RPC inválida ou indisponível;
-- resposta malformada do provider;
-- timeout de consulta;
-- endereço inválido;
-- protocolo não suportado;
-- ausência de configuração ou dado obrigatório.
+- Resposta malformada do provider;
+- Timeout de consulta;
+- Endereço inválido;
+- Protocolo não suportado;
+- Ausência de configuração ou dado obrigatório.
 
 Quando um item falha, o sistema registra o erro e continua processando o restante, sem quebrar a aplicação.
 
@@ -242,13 +246,12 @@ O projeto foi desenvolvido com abordagem de engenharia guiada por especificaçã
 
 A estrutura inclui:
 
-- visão do produto;
-- objetivos e regras;
-- modelo de dados;
-- contratos de interfaces;
-- plano de implementação;
-- checklist de tarefas e critérios de aceitação.
-
+- Visão do produto;
+- Objetivos e regras;
+- Modelo de dados;
+- Contratos de interfaces;
+- Plano de implementação;
+- Checklist de tarefas e critérios de aceitação.
 Essa abordagem permite que a solução evolua com clareza, rastreabilidade e menor risco de regressão.
 
 ---
@@ -257,24 +260,25 @@ Essa abordagem permite que a solução evolua com clareza, rastreabilidade e men
 
 ### MVP concluído
 
-- [x] inicialização do projeto
-- [x] modelo de domínio
-- [x] configuração JSON
-- [x] validação de endpoints e posições
-- [x] provider Aave
-- [x] provider Kamino
-- [x] classificação de health factor
+- [x] Inicialização do projeto
+- [x] Modelo de domínio
+- [x] Configuração JSON
+- [x] Validação de endpoints e posições
+- [x] Provider Aave
+- [x] Provider Kamino
+- [x] Classificação de health factor
 - [x] CLI com formato tabular
-- [x] robustez para falhas individuais
+- [x] Robustez para falhas individuais
+
 
 ### Próximos passos
 
-- [ ] testes de integração reais com RPC e APIs públicas
-- [ ] suporte a mais protocolos
-- [ ] execução concorrente por provider
-- [ ] histórico de observação de health factor
-- [ ] alertas e monitoramento contínuo
-- [ ] exportação de resultados para JSON/CSV
+- [ ] Testes de integração reais com RPC e APIs públicas
+- [ ] Suporte a mais protocolos
+- [ ] Execução concorrente por provider
+- [ ] Histórico de observação de health factor
+- [ ] Alertas e monitoramento contínuo
+- [ ] Exportação de resultados para JSON/CSV
 
 ---
 
