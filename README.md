@@ -72,222 +72,294 @@ A aplicação foi desenhada com separação clara de responsabilidades entre dom
                  |  orchestration       |
                  +----------+-----------+
                             |
-            +---------------+----------------+
-            |                                |
-            v                                v
-  +-------------------+        +----------------------+
-  | Aave Provider     |        | Kamino Provider      |
-  | Ethereum RPC      |        | Kamino API           |
-  +-------------------+        +----------------------+
-            |
-            v
-  +-------------------+
-  | Domain / Models   |
-  | Config / Provider |
-  | HealthFactor      |
-  +-------------------+
-```
+            <div align="center">
 
-### Camadas
+            # Health Factor Monitor
 
-- Domain: entidades e regras de negócio, como Config, HealthFactor, ProviderResult e classificação de risco.
-- Application: orchestrator responsável por mapear posições para providers e tratar falhas de forma resiliente.
-- Infrastructure: adapters para Aave e Kamino, além do carregador de configuração JSON.
-- Interface: CLI que monta as saídas em formato legível e define códigos de saída.
+            **Monitor decentralized lending positions on Aave and Kamino directly from the terminal.**
 
-### Principais contratos
+            A Go CLI to query lending positions' Health Factor, rank risk, and present results clearly — built with fault tolerance and an extensible provider architecture.
 
-A arquitetura segue o padrão de provider interface, permitindo adicionar novos protocolos sem acoplar a lógica do serviço à implementação concreta de cada protocolo.
+            </div>
 
----
+            ---
 
-## ⚙️ Stack tecnológica
+            ## 🎯 Problem
 
-### Linguagem e runtime
+            In the DeFi ecosystem, the Health Factor is a core metric to assess the risk of a credit position. In protocols such as Aave and Kamino, a position's health can change quickly due to market conditions, volatility, and leverage.
 
-- Go
-- CLI terminal-first
+            For users managing multiple positions across protocols, tracking this metric manually is slow, error-prone, and often suffers from integration issues.
 
-### Protocolos suportados
+            Health Factor Monitor solves this by providing a simple, automated experience to:
 
-- Aave (Ethereum)
-- Kamino (Solana)
-
-### Integrações e formatos
-
-- JSON-RPC para Ethereum
-- REST API para Kamino
-- Validação de endereços Ethereum e Solana
-- Leitura de configurações em JSON
-
-### Testes
-
-- Testes unitários por domínio, providers e service
-- Validação de comportamento em cenários de sucesso, timeout e erro
-- Cobertura de regras de classificação, configuração e recuperação de falhas
-
----
-
-## 🚀 Como usar
-
-### 1. Configuração
-
-Crie um arquivo de configuração com posições e RPC endpoints.
-
-```json
-{
-  "rpc_endpoints": {
-    "ethereum": "https://mainnet.example-rpc.com",
-    "solana": "https://api.mainnet-beta.solana.com"
-  },
-  "positions": [
-    {
-      "protocol": "aave",
-      "network": "ethereum",
-      "wallet": {
-        "address": "0x1234567890abcdef1234567890abcdef12345678",
-        "alias": "Main Wallet"
-      }
-    },
-    {
-      "protocol": "kamino",
-      "network": "solana",
-      "wallet": {
-        "address": "8v6GJfY...",
-        "alias": "Solana Position"
-      }
-    }
-  ]
-}
-```
-
-### 2. Execução
-
-```bash
-go run ./cmd/hfmon -config ./config.json
-```
-
-### 3. Filtrar por protocolo
-
-```bash
-go run ./cmd/hfmon -config ./config.json -protocol aave
-```
-
-### 4. Exemplo de saída
-
-```text
-Position      Protocol   Network   Health Factor   Status
-Main Wallet   aave       ethereum  2.41             safe
-Solana Pos.   kamino     solana    1.22             warning
-```
-
----
-
-## 🧪 Validação e robustez
+            - Load positions configured in JSON;
+            - Validate endpoints and wallet addresses before execution;
+            - Query multiple protocols in a single flow;
+            - Display results in a readable terminal table;
+            - Maintain robustness even when some providers fail.
 
 
-A aplicação foi construída pensando em casos reais de falha operacional:
+            ---
 
-- RPC inválida ou indisponível;
-- Resposta malformada do provider;
-- Timeout de consulta;
-- Endereço inválido;
-- Protocolo não suportado;
-- Ausência de configuração ou dado obrigatório.
+            ## 🚀 Delivered MVP
 
-Quando um item falha, o sistema registra o erro e continua processando o restante, sem quebrar a aplicação.
+            The MVP focuses on productivity and reliability and has already been implemented.
 
----
+            ### Current features
 
-## 📁 Estrutura do projeto
+            - Support for Aave on Ethereum;
+            - Support for Kamino on Solana;
+            - Load and validate configuration from JSON;
+            - Verify RPC endpoints and wallet addresses;
+            - Health Factor classification:
+              - Safe
+              - Warning
+              - Critical
+            - Run checks per protocol or for all configured positions;
+            - Per-position fault tolerance;
+            - Tabular terminal output with status and detailed error information;
+            - Appropriate exit codes for partial success or total failure.
 
-```text
-cmd/
-  hfmon/
-internal/
-  application/
-  domain/
-  infrastructure/
-    aave/
-    kamino/
-    config/
-  interfaces/
-    cli/
+            ### How the application works
 
-tests/
-  integration/
-  testdata/
+            The CLI reads a configuration file, validates the provided data, and then queries each position using the corresponding provider.
 
-specs/
-```
+            If a position fails due to timeout, invalid RPC, or malformed response, the rest of the positions are still processed and the program continues running.
 
----
+            ---
 
-## � Desenvolvimento Assistido por IA
+            ## 🏗️ Architecture
 
-Este projeto foi construído utilizando práticas modernas de desenvolvimento assistido por IA, com foco em produtividade, qualidade e documentação técnica.
+            The application is designed with a clear separation of concerns between domain, application, and infrastructure layers.
 
-| Categoria | Detalhe |
-| --- | --- |
-| IDE / Agent | OpenCode |
-| Modelo principal | DeepSeek V4 Flash Free |
-| Metodologia | Spec-Driven Development (SDD) |
-| Framework de especificação | Spec Kit |
+            ```text
+                             +----------------------+
+                             |        CLI           |
+                             |      hfmon           |
+                             +----------+-----------+
+                                        |
+                                        v
+                             +----------------------+
+                             |   Check Service      |
+                             |  orchestration       |
+                             +----------+-----------+
+                                        |
+                        +---------------+----------------+
+                        |                                |
+                        v                                v
+              +-------------------+        +----------------------+
+              | Aave Provider     |        | Kamino Provider      |
+              | Ethereum RPC      |        | Kamino API           |
+              +-------------------+        +----------------------+
+                        |
+                        v
+              +-------------------+
+              | Domain / Models   |
+              | Config / Provider |
+              | HealthFactor      |
+              +-------------------+
+            ```
 
-A utilização do OpenCode como ambiente de desenvolvimento e do DeepSeek V4 Flash Free como modelo principal permitiu acelerar a escrita de código, a revisão de arquitetura, a geração de testes e a organização da documentação técnica.
+            ### Layers
 
-A metodologia adotada foi o SDD, aplicada a partir do Spec Kit, disponível em https://github.com/github/spec-kit. Essa abordagem organiza o desenvolvimento em especificações, planejamento, validação e implementação incremental, mantendo o projeto alinhado com requisitos, arquitetura e critérios de aceitação.
+            - Domain: entities and business rules such as `Config`, `HealthFactor`, `ProviderResult`, and risk classification.
+            - Application: orchestrator responsible for mapping positions to providers and handling failures in a resilient way.
+            - Infrastructure: adapters for Aave and Kamino, plus the JSON configuration loader.
+            - Interface: CLI that renders readable output and defines exit codes.
 
-Em outras palavras, a solução foi pensada e construída com um fluxo de desenvolvimento estruturado: especificar primeiro, validar depois, implementar em pequenos ciclos e revisar continuamente.
+            ### Main contracts
 
-### 🧭 Documentação e especificação
+            The architecture follows a provider interface pattern, enabling adding new protocols without coupling service logic to concrete protocol implementations.
 
-O projeto foi desenvolvido com abordagem de engenharia guiada por especificação, com documentação formal armazenada em `specs/`.
+            ---
 
-A estrutura inclui:
+            ## ⚙️ Technology stack
 
-- Visão do produto;
-- Objetivos e regras;
-- Modelo de dados;
-- Contratos de interfaces;
-- Plano de implementação;
-- Checklist de tarefas e critérios de aceitação.
-Essa abordagem permite que a solução evolua com clareza, rastreabilidade e menor risco de regressão.
+            ### Language and runtime
 
----
+            - Go
+            - Terminal-first CLI
 
-## 🛣️ Roadmap
+            ### Supported protocols
 
-### MVP concluído
+            - Aave (Ethereum)
+            - Kamino (Solana)
 
-- [x] Inicialização do projeto
-- [x] Modelo de domínio
-- [x] Configuração JSON
-- [x] Validação de endpoints e posições
-- [x] Provider Aave
-- [x] Provider Kamino
-- [x] Classificação de health factor
-- [x] CLI com formato tabular
-- [x] Robustez para falhas individuais
+            ### Integrations and formats
+
+            - JSON-RPC for Ethereum
+            - REST API for Kamino
+            - Ethereum and Solana address validation
+            - JSON configuration loading
+
+            ### Tests
+
+            - Unit tests for domain, providers, and service
+            - Validation of behavior for success, timeout, and error scenarios
+            - Coverage for classification rules, configuration, and failure recovery
+
+            ---
+
+            ## 🚀 How to use
+
+            ### 1. Configuration
+
+            Create a configuration file with positions and RPC endpoints.
+
+            ```json
+            {
+              "rpc_endpoints": {
+                "ethereum": "https://mainnet.example-rpc.com",
+                "solana": "https://api.mainnet-beta.solana.com"
+              },
+              "positions": [
+                {
+                  "protocol": "aave",
+                  "network": "ethereum",
+                  "wallet": {
+                    "address": "0x1234567890abcdef1234567890abcdef12345678",
+                    "alias": "Main Wallet"
+                  }
+                },
+                {
+                  "protocol": "kamino",
+                  "network": "solana",
+                  "wallet": {
+                    "address": "8v6GJfY...",
+                    "alias": "Solana Position"
+                  }
+                }
+              ]
+            }
+            ```
+
+            ### 2. Run
+
+            ```bash
+            go run ./cmd/hfmon -config ./config.json
+            ```
+
+            ### 3. Filter by protocol
+
+            ```bash
+            go run ./cmd/hfmon -config ./config.json -protocol aave
+            ```
+
+            ### 4. Example output
+
+            ```text
+            Position      Protocol   Network   Health Factor   Status
+            Main Wallet   aave       ethereum  2.41             safe
+            Solana Pos.   kamino     solana    1.22             warning
+            ```
+
+            ---
+
+            ## 🧪 Validation and robustness
+
+            The application is built with realistic operational failures in mind:
+
+            - Invalid or unavailable RPC;
+            - Malformed provider response;
+            - Query timeout;
+            - Invalid address;
+            - Unsupported protocol;
+            - Missing configuration or required data.
+
+            When an item fails, the system logs the error and continues processing the rest without crashing.
+
+            ---
+
+            ## 📁 Project structure
+
+            ```text
+            cmd/
+              hfmon/
+            internal/
+              application/
+              domain/
+              infrastructure/
+                aave/
+                kamino/
+                config/
+              interfaces/
+                cli/
+
+            tests/
+              integration/
+              testdata/
+
+            specs/
+            ```
+
+            ---
+
+            ## AI-assisted development
+
+            This project was developed using modern AI-assisted development practices, focusing on productivity, quality, and technical documentation.
+
+            | Category | Detail |
+            | --- | --- |
+            | IDE / Agent | OpenCode |
+            | Main model | DeepSeek V4 Flash Free |
+            | Methodology | Spec-Driven Development (SDD) |
+            | Specification framework | Spec Kit |
+
+            Using OpenCode as the development environment and DeepSeek V4 Flash Free as the main model accelerated code authoring, architecture review, test generation, and documentation organization.
+
+            The methodology used is SDD, applied via the Spec Kit available at https://github.com/github/spec-kit. This approach organizes development into specifications, planning, validation, and incremental implementation, keeping the project aligned with requirements, architecture, and acceptance criteria.
+
+            In short, the solution was designed and built with a specification-first workflow: specify first, validate second, implement in small cycles, and continuously review.
+
+            ### Documentation and specification
+
+            The project follows a specification-driven engineering approach, with formal documentation stored in `specs/`.
+
+            The documentation includes:
+
+            - Product vision;
+            - Goals and rules;
+            - Data model;
+            - Interface contracts;
+            - Implementation plan;
+            - Task checklist and acceptance criteria.
+
+            This approach helps the solution evolve with clarity, traceability, and reduced regression risk.
+
+            ---
+
+            ## 🛣️ Roadmap
+
+            ### MVP completed
+
+            - [x] Project initialization
+            - [x] Domain model
+            - [x] JSON configuration
+            - [x] Endpoint and position validation
+            - [x] Aave provider
+            - [x] Kamino provider
+            - [x] Health Factor classification
+            - [x] Tabular CLI output
+            - [x] Robustness for individual failures
 
 
-### Próximos passos
+            ### Next steps
 
-- [ ] Testes de integração reais com RPC e APIs públicas
-- [ ] Suporte a mais protocolos
-- [ ] Execução concorrente por provider
-- [ ] Histórico de observação de health factor
-- [ ] Alertas e monitoramento contínuo
-- [ ] Exportação de resultados para JSON/CSV
+            - [ ] Real integration tests against RPCs and public APIs
+            - [ ] Support for additional protocols
+            - [ ] Concurrent execution per provider
+            - [ ] Historical observation of Health Factor
+            - [ ] Alerts and continuous monitoring
+            - [ ] Export results to JSON/CSV
 
----
+            ---
 
-## 🔒 Status
+            ## 🔒 Status
 
-Projeto em fase de MVP funcional, com arquitetura pronta para extensão e suporte a múltiplos protocolos.
+            Project is in a functional MVP stage, with an architecture ready for extension and multi-protocol support.
 
----
+            ---
 
-## 📄 Licença
+            ## 📄 License
 
-Este projeto está licenciado sob a licença MIT.
+            This project is licensed under the MIT License.
