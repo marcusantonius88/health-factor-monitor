@@ -1,0 +1,20 @@
+{
+  "rpc_endpoints": {
+    "ethereum": "http://127.0.0.1:8545",
+    "solana": "http://127.0.0.1:8899"
+  },
+  "positions": [
+    {
+      "alias": "aave-main",
+      "address": "0x0000000000000000000000000000000000000001",
+      "network": "ethereum",
+      "protocol": "aave"
+    },
+    {
+      "alias": "kamino-main",
+      "address": "11111111111111111111111111111111",
+      "network": "solana",
+      "protocol": "kamino"
+    }
+  ]
+}
