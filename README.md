@@ -392,7 +392,7 @@ A aplicação foi desenhada com separação clara de responsabilidades entre dom
               - [ ] Concurrent execution per provider
               - [ ] Historical observation of Health Factor
               - [ ] Alerts and continuous monitoring
-              - [ ] Export results to JSON or CSV file
+              - [ ] Export results to JSON or CSV file.
 
               ---
 
