@@ -1,0 +1,14 @@
+{
+  "rpc_endpoints": {
+    "ethereum": "<SEU_ENDPOINT_RPC_ETHEREUM>",
+    "solana": "<SEU_ENDPOINT_RPC_SOLANA>"
+  },
+  "positions": [
+    {
+      "alias": "<NOME_PARA_SUA_CARTEIRA>",
+      "address": "<ENDERECO_DA_SUA_CARTEIRA>",
+      "network": "ethereum | solana",
+      "protocol": "aave | kamino"
+    }
+  ]
+}
