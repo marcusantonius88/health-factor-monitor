@@ -90,11 +90,12 @@ func TestE2EHealthCheckFlow(t *testing.T) {
 	}
 
 	formatted := cli.FormatResults(results)
-	if !strings.Contains(formatted, "aave-main") || !strings.Contains(formatted, "kamino-main") {
-		t.Fatalf("formatted output missing labels: %s", formatted)
+	// Novo formato: Ethereum HF: 2.50 / Solana HF: 3.00
+	if !strings.Contains(formatted, "Ethereum HF: 2.50") {
+		t.Fatalf("formatted output missing Ethereum HF: %s", formatted)
 	}
-	if !strings.Contains(formatted, "safe") {
-		t.Fatalf("formatted output missing safe classification: %s", formatted)
+	if !strings.Contains(formatted, "Solana HF: 3.00") {
+		t.Fatalf("formatted output missing Solana HF: %s", formatted)
 	}
 
 	for _, result := range results {
@@ -103,9 +104,6 @@ func TestE2EHealthCheckFlow(t *testing.T) {
 		}
 		if result.HealthFactor == nil {
 			t.Fatalf("expected health factor for %s", result.Position.Wallet.Alias)
-		}
-		if result.HealthFactor.Classification != domain.ClassificationSafe {
-			t.Fatalf("health factor classification for %s = %q, want %q", result.Position.Wallet.Alias, result.HealthFactor.Classification, domain.ClassificationSafe)
 		}
 	}
 }

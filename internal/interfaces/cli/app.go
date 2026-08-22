@@ -3,66 +3,40 @@ package cli
 import (
 	"fmt"
 	"strings"
-	"text/tabwriter"
 
 	"github.com/marcus/health-factor-monitor/internal/domain"
 )
 
-// positionLabel returns a human-readable position name, preferring the alias
-// when set and falling back to the wallet address.
-func positionLabel(p domain.LendingPosition) string {
-	if strings.TrimSpace(p.Wallet.Alias) != "" {
-		return p.Wallet.Alias
-	}
-	return p.Wallet.Address
-}
-
-// formatValue renders a success or error result for the Health Factor column.
-func formatValue(r domain.ProviderResult) string {
-	if r.HealthFactor != nil {
-		return fmt.Sprintf("%.2f", r.HealthFactor.Value)
-	}
-	return "-"
-}
-
-// formatStatus renders the classification label, or an error marker when the
-// provider failed.
-func formatStatus(r domain.ProviderResult) string {
-	if r.HealthFactor != nil {
-		return r.HealthFactor.Classification
-	}
-	return "ERROR"
-}
-
-// FormatResults renders an aligned table of provider results. On error it also
-// appends the underlying error message beneath the table.
+// FormatResults formata os resultados dos providers como linhas simples:
+//   Ethereum HF: 1.96
+//   Solana HF:   2.21
+// ou com "unavailable" em caso de erro do provider.
 func FormatResults(results []domain.ProviderResult) string {
 	var buf strings.Builder
-	w := tabwriter.NewWriter(&buf, 0, 0, 2, ' ', 0)
-
-	fmt.Fprintln(w, "Position\tProtocol\tNetwork\tHealth Factor\tStatus")
-	for _, r := range results {
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n",
-			positionLabel(r.Position),
-			r.Position.Protocol,
-			r.Position.Network,
-			formatValue(r),
-			formatStatus(r),
-		)
-	}
-	_ = w.Flush()
-
 	for _, r := range results {
 		if r.Error != "" {
-			fmt.Fprintf(&buf, "\nError [%s]: %s\n", positionLabel(r.Position), r.Error)
+			fmt.Fprintf(&buf, "%s HF: unavailable\n", networkName(r.Position.Network))
+		} else {
+			fmt.Fprintf(&buf, "%s HF: %.2f\n", networkName(r.Position.Network), r.HealthFactor.Value)
 		}
 	}
-
 	return buf.String()
 }
 
-// HasSuccess reports whether at least one health factor was successfully
-// retrieved.
+// networkName retorna o nome da rede com base no valor do campo Network da
+// posição, capitalizando o primeiro letra (ethereum -> Ethereum, solana -> Solana).
+func networkName(net string) string {
+	switch net {
+	case "ethereum":
+		return "Ethereum"
+	case "solana":
+		return "Solana"
+	default:
+		return net
+	}
+}
+
+// HasSuccess reporta se pelo menos um health factor foi recuperado com sucesso.
 func HasSuccess(results []domain.ProviderResult) bool {
 	for _, r := range results {
 		if r.HealthFactor != nil {
