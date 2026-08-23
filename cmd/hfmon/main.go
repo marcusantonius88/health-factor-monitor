@@ -58,7 +58,10 @@ func run(ctx context.Context) error {
 func buildProviders(cfg domain.Config) map[string]domain.HealthFactorProvider {
 	providers := map[string]domain.HealthFactorProvider{}
 	if endpoint, ok := cfg.RPCEndpoints[domain.NetworkEthereum]; ok {
-		providers[protocolNetworkKey(domain.ProtocolAave, domain.NetworkEthereum)] = aave.NewProvider(endpoint)
+		providers[protocolNetworkKey(domain.ProtocolAave, domain.NetworkEthereum)] = aave.NewProvider(endpoint, domain.NetworkEthereum)
+	}
+	if endpoint, ok := cfg.RPCEndpoints[domain.NetworkBase]; ok {
+		providers[protocolNetworkKey(domain.ProtocolAave, domain.NetworkBase)] = aave.NewProvider(endpoint, domain.NetworkBase)
 	}
 	if _, ok := cfg.RPCEndpoints[domain.NetworkSolana]; ok {
 		providers[protocolNetworkKey(domain.ProtocolKamino, domain.NetworkSolana)] = kamino.NewProvider(kaminoAPIBaseURL)

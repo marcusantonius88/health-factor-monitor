@@ -8,14 +8,18 @@ import (
 )
 
 // FormatResults formata os resultados dos providers como linhas simples:
-//   Ethereum HF: 1.96
-//   Solana HF:   2.21
+//
+//	Ethereum HF: 1.96
+//	Solana HF:   2.21
+//
 // ou com "unavailable" em caso de erro do provider.
 func FormatResults(results []domain.ProviderResult) string {
 	var buf strings.Builder
 	for _, r := range results {
 		if r.Error != "" {
 			fmt.Fprintf(&buf, "%s HF: unavailable\n", networkName(r.Position.Network))
+		} else if r.HealthFactor != nil && r.HealthFactor.Value > 1e50 {
+			fmt.Fprintf(&buf, "%s HF: no active debt\n", networkName(r.Position.Network))
 		} else {
 			fmt.Fprintf(&buf, "%s HF: %.2f\n", networkName(r.Position.Network), r.HealthFactor.Value)
 		}
@@ -29,6 +33,8 @@ func networkName(net string) string {
 	switch net {
 	case "ethereum":
 		return "Ethereum"
+	case "base":
+		return "Base"
 	case "solana":
 		return "Solana"
 	default:

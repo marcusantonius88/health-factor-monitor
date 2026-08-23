@@ -11,6 +11,7 @@ const (
 	ProtocolKamino = "kamino"
 
 	NetworkEthereum = "ethereum"
+	NetworkBase     = "base"
 	NetworkSolana   = "solana"
 )
 
@@ -42,7 +43,7 @@ func supportedProtocols() []string {
 }
 
 func supportedNetworks() []string {
-	return []string{NetworkEthereum, NetworkSolana}
+	return []string{NetworkEthereum, NetworkBase, NetworkSolana}
 }
 
 func isValidProtocol(p string) bool {
@@ -66,6 +67,8 @@ func isValidNetwork(n string) bool {
 func isValidAddressForNetwork(addr, network string) bool {
 	switch network {
 	case NetworkEthereum:
+		return ethAddressRe.MatchString(addr)
+	case NetworkBase:
 		return ethAddressRe.MatchString(addr)
 	case NetworkSolana:
 		return isValidSolanaAddress(addr)

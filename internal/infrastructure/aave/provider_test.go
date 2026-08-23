@@ -2,8 +2,10 @@ package aave_test
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"math/big"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -15,9 +17,11 @@ import (
 )
 
 const (
-	poolContract = "0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2"
-	userAddress  = "0x0000000000000000000000000000000000000001"
-	selector     = "0xbf92857c"
+	v3PoolContract     = "0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2"
+	v2PoolContract     = "0x7d2768dE32b0b80b7a3454c06BdAc94A69DDc7A9"
+	baseV3PoolContract = "0xA238Dd80C259a72e81d7e4664a9801593F98d1c5"
+	userAddress        = "0x0000000000000000000000000000000000000001"
+	selector           = "0xbf92857c"
 )
 
 func hexUint256(t *testing.T, v int64) string {
@@ -46,11 +50,47 @@ func getUserAccountDataResult(t *testing.T, healthFactor int64) string {
 		hexUint256(t, healthFactor) // healthFactor
 }
 
+func getUserAccountDataResultFromWords(
+	t *testing.T,
+	totalCollateralBase, totalDebtBase, availableBorrowsBase,
+	currentLiquidationThreshold, ltv, healthFactor *big.Int,
+) string {
+	t.Helper()
+
+	words := []*big.Int{
+		totalCollateralBase,
+		totalDebtBase,
+		availableBorrowsBase,
+		currentLiquidationThreshold,
+		ltv,
+		healthFactor,
+	}
+
+	encoded := "0x"
+	for _, word := range words {
+		if word == nil {
+			word = big.NewInt(0)
+		}
+		encoded += fmt.Sprintf("%064x", word)
+	}
+	return encoded
+}
+
+func maxUint256(t *testing.T) *big.Int {
+	t.Helper()
+
+	decoded, err := hex.DecodeString(strings.Repeat("f", 64))
+	if err != nil {
+		t.Fatalf("decode max uint256: %v", err)
+	}
+	return new(big.Int).SetBytes(decoded)
+}
+
 func newTestServer(t *testing.T, handler http.HandlerFunc) (*httptest.Server, *aave.Provider) {
 	t.Helper()
 	srv := httptest.NewServer(handler)
 	t.Cleanup(srv.Close)
-	return srv, aave.NewProvider(srv.URL)
+	return srv, aave.NewProvider(srv.URL, domain.NetworkEthereum)
 }
 
 func TestGetHealthFactor(t *testing.T) {
@@ -191,8 +231,8 @@ func TestProviderSendsEthCallToPool(t *testing.T) {
 	if captured.method != "eth_call" {
 		t.Errorf("method = %q, want %q", captured.method, "eth_call")
 	}
-	if !strings.EqualFold(captured.to, poolContract) {
-		t.Errorf("to = %q, want %q", captured.to, poolContract)
+	if !strings.EqualFold(captured.to, v3PoolContract) {
+		t.Errorf("to = %q, want %q", captured.to, v3PoolContract)
 	}
 	if !strings.HasPrefix(captured.data, selector) {
 		t.Errorf("data = %q, want prefix %q", captured.data, selector)
@@ -202,14 +242,108 @@ func TestProviderSendsEthCallToPool(t *testing.T) {
 	}
 }
 
+func TestGetHealthFactorFallsBackToV2WhenV3IsInfinite(t *testing.T) {
+	infiniteHF := maxUint256(t)
+	v2HF := big.NewInt(1950000000000000000)
+
+	_, provider := newTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			Params []struct {
+				To string `json:"to"`
+			} `json:"params"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		if len(body.Params) == 0 {
+			t.Fatalf("missing params in request")
+		}
+
+		result := ""
+		switch {
+		case strings.EqualFold(body.Params[0].To, v3PoolContract):
+			result = getUserAccountDataResultFromWords(
+				t,
+				big.NewInt(0),
+				big.NewInt(0),
+				big.NewInt(0),
+				big.NewInt(0),
+				big.NewInt(0),
+				infiniteHF,
+			)
+		case strings.EqualFold(body.Params[0].To, v2PoolContract):
+			result = getUserAccountDataResultFromWords(
+				t,
+				big.NewInt(3000000000000000000),
+				big.NewInt(1000000000000000000),
+				big.NewInt(1000000000000000000),
+				big.NewInt(8000000000000000000),
+				big.NewInt(5000000000000000000),
+				v2HF,
+			)
+		default:
+			t.Fatalf("unexpected pool address: %s", body.Params[0].To)
+		}
+
+		_, _ = w.Write([]byte(rpcResult(result)))
+	})
+
+	got, err := provider.GetHealthFactor(context.Background(), userAddress)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got == nil {
+		t.Fatal("expected health factor, got nil")
+	}
+	if got.Value != 1.95 {
+		t.Fatalf("Value = %v, want 1.95", got.Value)
+	}
+	if got.Classification != domain.ClassificationSafe {
+		t.Fatalf("Classification = %q, want %q", got.Classification, domain.ClassificationSafe)
+	}
+}
+
 func TestProviderIdentity(t *testing.T) {
-	provider := aave.NewProvider("http://localhost:8545")
+	provider := aave.NewProvider("http://localhost:8545", domain.NetworkEthereum)
 
 	if got := provider.Protocol(); got != domain.ProtocolAave {
 		t.Errorf("Protocol() = %q, want %q", got, domain.ProtocolAave)
 	}
 	if got := provider.Network(); got != domain.NetworkEthereum {
 		t.Errorf("Network() = %q, want %q", got, domain.NetworkEthereum)
+	}
+}
+
+func TestProviderUsesBasePoolForBaseNetwork(t *testing.T) {
+	var capturedTo string
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			Params []struct {
+				To string `json:"to"`
+			} `json:"params"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		if len(body.Params) == 0 {
+			t.Fatal("expected params in request")
+		}
+		capturedTo = body.Params[0].To
+		_, _ = w.Write([]byte(rpcResult(getUserAccountDataResult(t, 1950000000000000000))))
+	}))
+	defer srv.Close()
+
+	provider := aave.NewProvider(srv.URL, domain.NetworkBase)
+	got, err := provider.GetHealthFactor(context.Background(), userAddress)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got == nil || got.Value != 1.95 {
+		t.Fatalf("Value = %+v, want 1.95", got)
+	}
+	if !strings.EqualFold(capturedTo, baseV3PoolContract) {
+		t.Fatalf("to = %q, want %q", capturedTo, baseV3PoolContract)
 	}
 }
 

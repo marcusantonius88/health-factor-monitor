@@ -59,6 +59,24 @@ func TestLoad(t *testing.T) {
 			wantPositions: 2,
 		},
 		{
+			name: "valid config with base aave position",
+			content: `{
+				"rpc_endpoints": {
+					"base": "https://base.example.com"
+				},
+				"positions": [
+					{
+						"alias": "aave-base",
+						"address": "` + validEthAddress + `",
+						"network": "base",
+						"protocol": "aave"
+					}
+				]
+			}`,
+			wantErr:       false,
+			wantPositions: 1,
+		},
+		{
 			name:    "missing file",
 			content: "",
 			path:    filepath.Join(t.TempDir(), "nonexistent.json"),

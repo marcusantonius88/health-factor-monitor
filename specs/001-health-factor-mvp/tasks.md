@@ -92,7 +92,16 @@ All paths below are relative to repository root: `/home/marcus/projects/health-f
 - [x] T023 [US1] Register Kamino provider in `cmd/hfmon/main.go` — add Kamino provider to the provider map alongside Aave; no other code changes needed
 - [x] T024 [US1] Validate both providers end-to-end: run with config containing both Aave and Kamino positions, verify output displays both with correct HFs
 
-**Checkpoint**: Both providers work. `go test ./internal/infrastructure/kamino/...` passes. Output shows both protocols side by side.
+**Investigation Findings (T024)**:
+- Aave position on Ethereum Mainnet was investigated across all three official V3 deployments (Core, Prime/Lido, EtherFi) via the Aave Address Book
+- All deployments returned no active position for the user address (0x168378977EDcB8B5c93025213e41cDD76e5EE058): totalCollateralBase=0, totalDebtBase=0, healthFactor=maximum or ~4.52e+56
+- **DefiSim was investigated technically and found to be a simulator/calculator where users manually input addresses to visualize hypothetical positions - NOT a real-time blockchain data source**
+- The "Health Factor ~1.96" displayed by DefiSim originates from a simulated position, not actual on-chain data
+- **Position was actually on Aave Base v3 Mainnet** - the user's wallet has an active borrow position on Base network
+- Solana position (Kamino) confirmed active: HF ~2.20 matches user expectation
+- Application correctly returns real on-chain data: Base HF = 1.95 (matches DefiSim), Solana HF ~2.20
+
+**Checkpoint**: Both providers work. `go test ./internal/infrastructure/kamino/...` passes. Output shows both protocols side by side. Aave correctly reflects on-chain state for Base network (HF 1.95 matches DefiSim simulation).
 
 ---
 

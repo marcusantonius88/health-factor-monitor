@@ -77,6 +77,11 @@ func TestLendingPositionValidate(t *testing.T) {
 			wantErr:  false,
 		},
 		{
+			name:     "valid base aave position",
+			position: LendingPosition{Wallet: Wallet{Address: validEthAddress}, Protocol: ProtocolAave, Network: NetworkBase},
+			wantErr:  false,
+		},
+		{
 			name:     "unsupported protocol",
 			position: LendingPosition{Wallet: Wallet{Address: validEthAddress}, Protocol: "morpho", Network: NetworkEthereum},
 			wantErr:  true,

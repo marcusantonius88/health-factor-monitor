@@ -78,7 +78,7 @@ func TestE2EHealthCheckFlow(t *testing.T) {
 	cfg.RPCEndpoints[domain.NetworkSolana] = kaminoServer.URL
 
 	providers := map[string]domain.HealthFactorProvider{
-		"aave:ethereum": aave.NewProvider(aaveServer.URL),
+		"aave:ethereum": aave.NewProvider(aaveServer.URL, domain.NetworkEthereum),
 		"kamino:solana": kamino.NewProvider(kaminoServer.URL),
 	}
 
