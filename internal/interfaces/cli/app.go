@@ -7,21 +7,32 @@ import (
 	"github.com/marcus/health-factor-monitor/internal/domain"
 )
 
-// FormatResults formata os resultados dos providers como linhas simples:
+// FormatResults formata os resultados dos providers com classificação visual em emojis.
 //
-//	Ethereum HF: 1.96
-//	Solana HF:   2.21
+// Saída esperada:
+//
+//	Health Factor
+//	-------------
+//	Base:	🟩 1.97
+//	Solana:	🟩 2.22
 //
 // ou com "unavailable" em caso de erro do provider.
 func FormatResults(results []domain.ProviderResult) string {
 	var buf strings.Builder
+	
+	// Header
+	buf.WriteString("Health Factor\n")
+	buf.WriteString("-------------\n")
+	
 	for _, r := range results {
 		if r.Error != "" {
 			fmt.Fprintf(&buf, "%s HF: unavailable\n", networkName(r.Position.Network))
-		} else if r.HealthFactor != nil && r.HealthFactor.Value > 1e50 {
-			fmt.Fprintf(&buf, "%s HF: no active debt\n", networkName(r.Position.Network))
+		} else if r.HealthFactor == nil {
+			fmt.Fprintf(&buf, "%s:\t%s\n", networkName(r.Position.Network), domain.EmojiForHealthFactor(0))
+		} else if r.HealthFactor.Value > 1e50 {
+			fmt.Fprintf(&buf, "%s:\t%s no active debt\n", networkName(r.Position.Network), domain.EmojiForHealthFactor(r.HealthFactor.Value))
 		} else {
-			fmt.Fprintf(&buf, "%s HF: %.2f\n", networkName(r.Position.Network), r.HealthFactor.Value)
+			fmt.Fprintf(&buf, "%s:\t%s %.2f\n", networkName(r.Position.Network), domain.EmojiForHealthFactor(r.HealthFactor.Value), r.HealthFactor.Value)
 		}
 	}
 	return buf.String()

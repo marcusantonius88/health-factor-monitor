@@ -26,7 +26,8 @@ func TestFormatResults(t *testing.T) {
 	}
 
 	got := FormatResults(results)
-	want := "Ethereum HF: no active debt\nSolana HF: 2.18\n"
+	// Novo formato: Health Factor header + alinhamento com tabulação
+	want := "Health Factor\n-------------\nEthereum:\t🟩 no active debt\nSolana:\t🟩 2.18\n"
 	if got != want {
 		t.Fatalf("FormatResults() = %q, want %q", got, want)
 	}

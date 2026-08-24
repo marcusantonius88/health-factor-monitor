@@ -91,10 +91,10 @@ func TestE2EHealthCheckFlow(t *testing.T) {
 
 	formatted := cli.FormatResults(results)
 	// Novo formato: Ethereum HF: 2.50 / Solana HF: 3.00
-	if !strings.Contains(formatted, "Ethereum HF: 2.50") {
+	if !strings.Contains(formatted, "Ethereum:	🟩 2.50") {
 		t.Fatalf("formatted output missing Ethereum HF: %s", formatted)
 	}
-	if !strings.Contains(formatted, "Solana HF: 3.00") {
+	if !strings.Contains(formatted, "Solana:	🟩 3.00") {
 		t.Fatalf("formatted output missing Solana HF: %s", formatted)
 	}
 
