@@ -19,9 +19,9 @@ For users managing multiple positions across protocols, tracking this metric man
 Health Factor Monitor solves this by providing a simple, automated experience to:
 
 - Load positions configured in JSON;
-- Validate endpoints and wallet addresses before execution;
+- Validate required network entries and wallet address formats before execution;
 - Query multiple protocols in a single flow;
-- Display results in a readable terminal table;
+- Display results in a readable terminal summary grouped by network;
 - Maintain robustness even when some providers fail.
 
 ---
@@ -36,20 +36,20 @@ The MVP focuses on productivity and reliability and has already been implemented
 - Support for Kamino on Solana;
 - Load and validate configuration from JSON;
 - Verify RPC endpoints and wallet addresses;
-- Health Factor classification with visual emoji indicators:
+- Visual Health Factor indicators rendered by the CLI:
   - 🟩 Safe: HF >= 1.50
   - 🟨 Attention: 1.10 <= HF < 1.50
   - 🟥 Critical: HF < 1.10
 - Run checks per protocol or for all configured positions;
 - Per-position fault tolerance;
 - Terminal output with emoji indicators and Health Factor values;
-- Appropriate exit codes for partial success or total failure.
+- Exit status `0` when at least one position succeeds, or `1` when no position succeeds.
 
 ### How the application works
 
-The CLI reads a configuration file, validates the provided data, and then queries each position using the corresponding provider.
+The CLI reads a configuration file, validates the provided data, and then queries each position using the corresponding provider. Configuration validation checks required fields, supported protocols and networks, wallet address formats, and whether an endpoint entry exists for each position's network. It does not probe endpoint availability before querying.
 
-If a position fails due to timeout, invalid RPC, or malformed response, the rest of the positions are still processed and the program continues running.
+If a position fails due to timeout, unavailable RPC/API, or malformed response, the rest of the positions are still processed and the program continues running. HTTP requests use a 30-second client timeout.
 
 ### Architecture
 
@@ -88,7 +88,7 @@ The application is designed with a clear separation of concerns between domain, 
 - **Domain**: entities and business rules such as `Config`, `HealthFactor`, `ProviderResult`, and risk classification.
 - **Application**: orchestrator responsible for mapping positions to providers and handling failures in a resilient way.
 - **Infrastructure**: adapters for Aave and Kamino, plus the JSON configuration loader.
-- **Interface**: CLI that renders readable output with emoji indicators and defines exit codes.
+- **Interface**: CLI that renders a readable network-based summary with emoji indicators and defines exit status behavior.
 
 ### Main contracts
 
@@ -170,6 +170,8 @@ Base:	🟩 1.97
 Solana:	🟩 2.22
 ```
 
+The output uses the network name rather than the configured alias or protocol. A position without an active debt is shown as `no active debt`; provider failures are shown as `HF: unavailable`.
+
 ### 4. Filter by protocol
 
 ```bash
@@ -189,7 +191,7 @@ The application is built with realistic operational failures in mind:
 - Unsupported protocol;
 - Missing configuration or required data.
 
-When an item fails, the system logs the error and continues processing the rest without crashing.
+When an item fails, the system continues processing the rest without crashing. The CLI prints the unavailable result but does not print the underlying provider error. If at least one result succeeds, the process exits with status `0`; otherwise it exits with status `1`.
 
 ---
 
