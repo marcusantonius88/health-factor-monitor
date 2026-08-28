@@ -180,7 +180,7 @@ go run ./cmd/hfmon -config ./config.json -protocol aave
 
 ---
 
-## 🧪 Validation and robustness
+## 🧪 Validation and Robustness
 
 The application is built with realistic operational failures in mind:
 
