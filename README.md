@@ -161,7 +161,7 @@ Create a configuration file with positions and RPC endpoints.
 go run ./cmd/hfmon -config ./config.json
 ```
 
-### 3. Example output
+### 3. Example Output
 
 ```text
 Health Factor
