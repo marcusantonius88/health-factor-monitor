@@ -195,7 +195,7 @@ When an item fails, the system continues processing the rest without crashing. T
 
 ---
 
-## 📁 Project structure
+## 📁 Project Structure
 
 ```text
 cmd/
