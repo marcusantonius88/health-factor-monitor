@@ -172,7 +172,7 @@ Solana:	🟩 2.22
 
 The output uses the network name rather than the configured alias or protocol. A position without an active debt is shown as `no active debt`; provider failures are shown as `HF: unavailable`.
 
-### 4. Filter by protocol
+### 4. Filter by Protocol
 
 ```bash
 go run ./cmd/hfmon -config ./config.json -protocol aave
