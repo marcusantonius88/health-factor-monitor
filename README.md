@@ -125,7 +125,7 @@ The architecture follows a provider interface pattern, enabling adding new proto
 
 ---
 
-## 🚀 How to use
+## 🚀 How to Use
 
 ### 1. Configuration
 
