@@ -109,7 +109,7 @@ The architecture follows a provider interface pattern, enabling adding new proto
 - Aave on Base (Layer 2)
 - Kamino on Solana
 
-### Integrations and formats
+### Integrations and Formats
 
 - JSON-RPC for Ethereum and Base
 - REST API for Kamino
