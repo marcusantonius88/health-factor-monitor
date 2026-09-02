@@ -98,7 +98,7 @@ The architecture follows a provider interface pattern, enabling adding new proto
 
 ## 🛠️ Technology stack
 
-### Language and runtime
+### Language and Runtime
 
 - Go
 - Terminal-first CLI
