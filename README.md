@@ -103,7 +103,7 @@ The architecture follows a provider interface pattern, enabling adding new proto
 - Go
 - Terminal-first CLI
 
-### Supported protocols and networks
+### Supported Protocols and Networks
 
 - Aave on Ethereum Mainnet
 - Aave on Base (Layer 2)
