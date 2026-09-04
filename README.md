@@ -90,7 +90,7 @@ The application is designed with a clear separation of concerns between domain, 
 - **Infrastructure**: adapters for Aave and Kamino, plus the JSON configuration loader.
 - **Interface**: CLI that renders a readable network-based summary with emoji indicators and defines exit status behavior.
 
-### Main contracts
+### Main Contracts
 
 The architecture follows a provider interface pattern, enabling adding new protocols without coupling service logic to concrete protocol implementations.
 
