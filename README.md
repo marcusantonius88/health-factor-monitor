@@ -96,7 +96,7 @@ The architecture follows a provider interface pattern, enabling adding new proto
 
 ---
 
-## 🛠️ Technology stack
+## 🛠️ Technology Stack
 
 ### Language and Runtime
 
