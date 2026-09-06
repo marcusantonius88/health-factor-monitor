@@ -30,7 +30,7 @@ Health Factor Monitor solves this by providing a simple, automated experience to
 
 The MVP focuses on productivity and reliability and has already been implemented.
 
-### Current features
+### Current Features
 
 - Support for Aave on Base and Ethereum Mainnet;
 - Support for Kamino on Solana;
