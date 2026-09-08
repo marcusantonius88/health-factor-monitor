@@ -155,13 +155,33 @@ Create a configuration file with positions and RPC endpoints.
 }
 ```
 
-### 2. Run
+### 2. Install the CLI
+
+Build and install the `hf` command in Go's binary directory:
+
+```bash
+make install
+```
+
+If Go's binary directory is not already in your `PATH`, add it to your shell configuration:
+
+```bash
+export PATH="$PATH:$(go env GOPATH)/bin"
+```
+
+### 3. Run
+
+```bash
+hf -config ./config.json
+```
+
+For development, the CLI can still be run from the source tree:
 
 ```bash
 go run ./cmd/hfmon -config ./config.json
 ```
 
-### 3. Example Output
+### 4. Example Output
 
 ```text
 Health Factor
@@ -172,10 +192,10 @@ Solana:	🟩 2.22
 
 The output uses the network name rather than the configured alias or protocol. A position without an active debt is shown as `no active debt`; provider failures are shown as `HF: unavailable`.
 
-### 4. Filter by Protocol
+### 5. Filter by Protocol
 
 ```bash
-go run ./cmd/hfmon -config ./config.json -protocol aave
+hf -config ./config.json -protocol aave
 ```
 
 ---
