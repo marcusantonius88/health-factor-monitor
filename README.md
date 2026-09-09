@@ -45,7 +45,7 @@ The MVP focuses on productivity and reliability and has already been implemented
 - Terminal output with emoji indicators and Health Factor values;
 - Exit status `0` when at least one position succeeds, or `1` when no position succeeds.
 
-### How the Application works
+### How the Application Works
 
 The CLI reads a configuration file, validates the provided data, and then queries each position using the corresponding provider. Configuration validation checks required fields, supported protocols and networks, wallet address formats, and whether an endpoint entry exists for each position's network. It does not probe endpoint availability before querying.
 
