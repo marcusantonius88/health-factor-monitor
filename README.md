@@ -1,12 +1,8 @@
-<div align="center">
-
 # Health Factor Monitor
 
 **Monitor decentralized lending positions on Aave and Kamino directly from the terminal.**
 
 A Go CLI to query lending positions' Health Factor, rank risk, and present results clearly — built with fault tolerance and an extensible provider architecture.
-
-</div>
 
 ---
 
