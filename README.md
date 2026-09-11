@@ -171,7 +171,7 @@ export PATH="$PATH:$(go env GOPATH)/bin"
 hf -config ./config.json
 ```
 
-For development, the CLI can still be run from the source tree:
+For development the CLI can still be run from the source tree:
 
 ```bash
 go run ./cmd/hfmon -config ./config.json
