@@ -153,7 +153,7 @@ Create a configuration file with positions and RPC endpoints.
 
 ### 2. Install the CLI
 
-Build and install the `hf` command in Go binary directory:
+Build and install `hf` command in Go binary directory:
 
 ```bash
 make install
