@@ -159,7 +159,7 @@ Build and install `hf` command in Go binary directory:
 make install
 ```
 
-If Go's binary directory is not already in your `PATH`, add it to your shell configuration:
+If Go binary directory is not already in your `PATH`, add it to your shell configuration:
 
 ```bash
 export PATH="$PATH:$(go env GOPATH)/bin"
