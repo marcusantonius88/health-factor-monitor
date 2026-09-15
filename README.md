@@ -198,7 +198,7 @@ hf -config ./config.json -protocol aave
 
 ## 🧪 Validation and Robustness
 
-The application is built with realistic operational failures in mind:
+The application is built with realistic operational failures:
 
 - Invalid or unavailable RPC;
 - Malformed provider response;
