@@ -2,7 +2,7 @@
 
 **Monitor decentralized lending positions on Aave and Kamino directly from the terminal.**
 
-A Go CLI to query lending positions' Health Factor, rank risk, and present results clearly — built with fault tolerance and an extensible provider architecture.
+A Go CLI for querying lending positions' Health Factors, ranking risk, and presenting results clearly — built with fault tolerance and an extensible provider architecture.
 
 ---
 
@@ -10,7 +10,7 @@ A Go CLI to query lending positions' Health Factor, rank risk, and present resul
 
 In the DeFi ecosystem, the Health Factor is a core metric to assess the risk of a credit position. In protocols such as Aave and Kamino, a position's health can change quickly due to market conditions, volatility, and leverage.
 
-For users managing multiple positions across protocols, tracking this metric manually is slow, error-prone, and often suffers from integration issues.
+For users managing multiple positions across protocols, tracking this metric manually is slow, error-prone, and often affected by integration issues.
 
 Health Factor Monitor solves this by providing a simple, automated experience to:
 
@@ -24,14 +24,14 @@ Health Factor Monitor solves this by providing a simple, automated experience to
 
 ## 🚀 Delivered MVP
 
-The MVP focuses on productivity and reliability and has already been implemented.
+The MVP focuses on productivity and reliability.
 
 ### Current Features
 
 - Support for Aave on Base and Ethereum Mainnet;
 - Support for Kamino on Solana;
 - Load and validate configuration from JSON;
-- Verify RPC endpoints and wallet addresses;
+- Validate RPC endpoint entries and wallet addresses;
 - Visual Health Factor indicators rendered by the CLI:
   - 🟩 Safe: HF >= 1.50
   - 🟨 Attention: 1.10 <= HF < 1.50
@@ -88,7 +88,7 @@ The application is designed with a clear separation of concerns between domain, 
 
 ### Main Contracts
 
-The architecture follows a provider interface pattern, enabling adding new protocols without coupling service logic to concrete protocol implementations.
+The architecture follows a provider interface pattern, enabling the addition of new protocols without coupling service logic to concrete protocol implementations.
 
 ---
 
@@ -115,8 +115,8 @@ The architecture follows a provider interface pattern, enabling adding new proto
 
 ### Tests
 
-- Unit tests for domain, providers, and service
-- Validation of behavior for success, timeout, and error scenarios
+- Unit tests for the domain, providers, and service
+- Validation of behavior in success, timeout, and error scenarios
 - Coverage for classification rules, configuration, and failure recovery
 
 ---
@@ -153,13 +153,13 @@ Create a configuration file with positions and RPC endpoints.
 
 ### 2. Install the CLI
 
-Build and install `hf` command in Go binary directory:
+Build and install the `hf` command in the Go binary directory:
 
 ```bash
 make install
 ```
 
-If Go binary directory is not already in your `PATH`, add it to your shell configuration:
+If the Go binary directory is not already in your `PATH`, add it to your shell configuration:
 
 ```bash
 export PATH="$PATH:$(go env GOPATH)/bin"
@@ -171,7 +171,7 @@ export PATH="$PATH:$(go env GOPATH)/bin"
 hf -config ./config.json
 ```
 
-For development the CLI can still be run from the source tree:
+For development, the CLI can still be run from the source tree:
 
 ```bash
 go run ./cmd/hfmon -config ./config.json
