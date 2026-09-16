@@ -10,7 +10,7 @@ A Go CLI for querying lending positions' Health Factors, ranking risk, and prese
 
 In the DeFi ecosystem, the Health Factor is a core metric to assess the risk of a credit position. In protocols such as Aave and Kamino, a position's health can change quickly due to market conditions, volatility, and leverage.
 
-For users managing multiple positions across protocols, tracking this metric manually is slow, error-prone, and often affected by integration issues.
+For users managing multiple positions across protocols, tracking this metric manually is slow and often affected by integration issues.
 
 Health Factor Monitor solves this by providing a simple, automated experience to:
 
