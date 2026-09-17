@@ -45,7 +45,9 @@ The MVP focuses on productivity and reliability.
 
 The CLI reads a configuration file, validates the provided data, and then queries each position using the corresponding provider. Configuration validation checks required fields, supported protocols and networks, wallet address formats, and whether an endpoint entry exists for each position's network. It does not probe endpoint availability before querying.
 
-If a position fails due to timeout, unavailable RPC/API, or malformed response, the rest of the positions are still processed and the program continues running. HTTP requests use a 30-second client timeout.
+For Aave on Ethereum, the provider first queries the V3 contract and falls back to the V2 pool when V3 returns an effectively infinite health factor. For Kamino, the health factor is derived from portfolio LTV data and supply-only positions are ignored as they do not represent active debt.
+
+If a position fails due to timeout, unavailable RPC/API, malformed response, or missing active debt, the rest of the positions are still processed and the program continues running. HTTP requests use a 30-second client timeout.
 
 ### Architecture
 
@@ -186,7 +188,7 @@ Base:	🟩 1.97
 Solana:	🟩 2.22
 ```
 
-The output uses the network name rather than the configured alias or protocol. A position without an active debt is shown as `no active debt`; provider failures are shown as `HF: unavailable`.
+The output uses the network name rather than the configured alias or protocol. A position without an active debt is rendered as `no active debt` only when the provider returns an effectively infinite Aave health factor; provider failures or missing active borrow records are shown as `HF: unavailable`.
 
 ### 5. Filter by Protocol
 
