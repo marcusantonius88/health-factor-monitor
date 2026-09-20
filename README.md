@@ -53,32 +53,13 @@ If a position fails due to timeout, unavailable RPC/API, malformed response, or 
 
 The application is designed with a clear separation of concerns between domain, application, and infrastructure.
 
-```text
-                +----------------------+
-                |        CLI           |
-                |      hfmon           |
-                +----------+-----------+
-                           |
-                           v
-                +----------------------+
-                |   Check Service      |
-                |  orchestration       |
-                +----------+-----------+
-                           |
-        +---------------+----------------+
-        |                                |
-        v                                v
-+-------------------+        +----------------------+
-| Aave Provider     |        | Kamino Provider      |
-| Ethereum/RPC      |        | Kamino API           |
-+-------------------+        +----------------------+
-          |
-          v
-+-------------------+
-| Domain / Models   |
-| Config / Provider |
-| HealthFactor      |
-+-------------------+
+```mermaid
+flowchart TD
+    CLI["CLI\nhfmon"] --> CHECK["Check Service\n orchestration"]
+    CHECK --> AAVE["Aave Provider\nEthereum / Base RPC"]
+    CHECK --> KAMINO["Kamino Provider\nKamino API"]
+    AAVE --> DOMAIN["Domain / Models\nConfig / Provider\nHealthFactor"]
+    KAMINO --> DOMAIN
 ```
 
 ### Layers
