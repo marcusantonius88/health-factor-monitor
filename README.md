@@ -75,6 +75,71 @@ The architecture follows a provider interface pattern, enabling the addition of 
 
 ---
 
+## Desenvolvimento Assistido por IA
+
+Este projeto foi desenvolvido utilizando Desenvolvimento Orientado por Especificação (Spec-Driven Development — SDD), com o GitHub Spec Kit e o OpenCode como ferramentas de apoio ao desenvolvimento.
+
+A IA foi utilizada como parte do processo de engenharia de software, não apenas como geradora de código. As decisões de produto, arquitetura e escopo foram definidas e revisadas humanamente antes e durante a implementação.
+
+### 🧠 Fluxo de desenvolvimento
+
+1. **Constitution** — definição dos princípios arquiteturais, tecnologias, restrições e diretrizes do projeto.
+2. **Specification** — definição do problema, comportamento esperado, requisitos funcionais e valor de negócio.
+3. **Planning** — definição da arquitetura, estrutura do projeto e decisões técnicas.
+4. **Research** — investigação de APIs, protocolos, integrações e alternativas técnicas.
+5. **Data Model & Contracts** — definição das entidades de domínio e contratos necessários.
+6. **Task Breakdown** — decomposição do plano em tarefas pequenas e incrementais.
+7. **Implementation** — implementação de uma tarefa por vez utilizando o OpenCode.
+8. **Validation & Review** — execução de testes, análise estática e revisão da implementação.
+9. **Commit** — versionamento de cada tarefa concluída.
+
+### 🛠️ Ferramentas utilizadas
+
+- **GitHub Spec Kit** — especificação e planejamento orientados por SDD.
+- **OpenCode** — agente de IA utilizado durante a implementação e revisão do código.
+- **Modelos de IA** — utilizados como agentes de desenvolvimento dentro do OpenCode.
+- **Git/GitHub** — versionamento e gerenciamento do código.
+
+### 👨‍💻 Human-in-the-loop
+
+A implementação assistida por IA não substitui as decisões de engenharia.
+
+O fluxo mantém participação humana em pontos importantes:
+
+- Definição do problema e dos requisitos.
+- Definição dos princípios arquiteturais.
+- Escolha e revisão das decisões técnicas.
+- Revisão dos artefatos gerados pelo Spec Kit.
+- Validação das implementações produzidas pela IA.
+- Investigação e correção de problemas.
+- Revisão final antes dos commits.
+
+O objetivo é utilizar IA para acelerar a execução e reduzir trabalho repetitivo, mantendo as decisões de engenharia, validação e responsabilidade técnica sob supervisão humana.
+
+### 📚 Artefatos de especificação
+
+Os artefatos utilizados durante o desenvolvimento são versionados no próprio projeto, permitindo acompanhar não apenas o código produzido, mas também as decisões e especificações que orientaram sua implementação.
+
+```text
+constitution.md
+      ↓
+spec.md
+      ↓
+plan.md
+      ↓
+research.md
+      ↓
+data-model.md
+      ↓
+contracts/
+      ↓
+tasks.md
+      ↓
+implementação
+```
+
+---
+
 ## 🛠️ Technology Stack
 
 ### Language and Runtime
