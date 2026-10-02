@@ -75,7 +75,7 @@ The architecture follows a provider interface pattern, enabling the addition of 
 
 ---
 
-## AI-Assisted Development
+## 🤖 AI-Assisted Development
 
 This project was developed using Spec-Driven Development (SDD), with GitHub Spec Kit and OpenCode supporting the development workflow.
 
