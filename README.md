@@ -224,15 +224,15 @@ AI was used as part of the software engineering process, not just as a code gene
 
 ### 🧠 Development Workflow
 
-1. **Constitution** — definition of architectural principles, technologies, constraints, and project guidelines.
-2. **Specification** — definition of the problem, expected behavior, functional requirements, and business value.
-3. **Planning** — definition of the architecture, project structure, and technical decisions.
-4. **Research** — investigation of APIs, protocols, integrations, and technical alternatives.
-5. **Data Model & Contracts** — definition of the domain entities and required contracts.
-6. **Task Breakdown** — decomposition of the plan into small, incremental tasks.
-7. **Implementation** — implementation of one task at a time using OpenCode.
-8. **Validation & Review** — execution of tests, static analysis, and implementation review.
-9. **Commit** — versioning of each completed task.
+1. **Constitution** — definition of architectural principles, technologies, constraints, and project guidelines. ( `/speckit.constitution` )
+2. **Specification** — definition of the problem, expected behavior, functional requirements, and business value. ( `/speckit.specify` )
+3. **Planning** — definition of the architecture, project structure, and technical decisions. ( `/speckit.plan` )
+4. **Research** — investigation of APIs, protocols, integrations, and technical alternatives. ( `/speckit.plan` )
+5. **Data Model & Contracts** — definition of the domain entities and required contracts. ( `/speckit.plan` )
+6. **Task Breakdown** — decomposition of the plan into small, incremental tasks. ( `/speckit.tasks` )
+7. **Implementation** — implementation of one task at a time using OpenCode. ( `/speckit.implement` )
+8. **Validation & Review** — execution of tests, static analysis, and implementation review. ( `/speckit.analyze` )
+9. **Commit** — versioning of each completed task. ( `git commit` )
 
 ### 🛠️ Tools Used
 
