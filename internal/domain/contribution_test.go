@@ -337,3 +337,163 @@ func TestContributionEstimateValidate(t *testing.T) {
 		})
 	}
 }
+
+func TestPositionSnapshotValidate(t *testing.T) {
+	validPosition := LendingPosition{
+		Wallet:   Wallet{Address: validEthAddress},
+		Protocol: ProtocolAave,
+		Network:  NetworkBase,
+	}
+	validHF := &HealthFactor{Value: 1.32, Classification: ClassificationWarning}
+	validBasis := &ContributionBasis{
+		CurrentHealthFactor:          1.32,
+		EffectiveDebtUSD:             100000,
+		IncrementalLiquidationFactor: 0.82,
+		PriceUSD:                     85000,
+		AssetPrecision:               8,
+		PriceFreshnessValidated:      true,
+	}
+
+	tests := []struct {
+		name     string
+		snapshot PositionSnapshot
+		valid    bool
+	}{
+		{
+			name: "available basis snapshot",
+			snapshot: PositionSnapshot{
+				Position:          validPosition,
+				HealthFactor:      validHF,
+				ContributionBasis: validBasis,
+			},
+			valid: true,
+		},
+		{
+			name: "unavailable estimate snapshot",
+			snapshot: PositionSnapshot{
+				Position:                      validPosition,
+				HealthFactor:                  validHF,
+				ContributionUnavailableReason: "dados de preço indisponíveis",
+			},
+			valid: true,
+		},
+		{
+			name: "safe snapshot has no estimate data",
+			snapshot: PositionSnapshot{
+				Position:     validPosition,
+				HealthFactor: &HealthFactor{Value: 1.5, Classification: ClassificationSafe},
+			},
+			valid: true,
+		},
+		{
+			name: "basis and unavailable reason are mutually exclusive",
+			snapshot: PositionSnapshot{
+				Position:                      validPosition,
+				HealthFactor:                  validHF,
+				ContributionBasis:             validBasis,
+				ContributionUnavailableReason: "dados incompletos",
+			},
+			valid: false,
+		},
+		{
+			name: "missing health factor",
+			snapshot: PositionSnapshot{
+				Position: validPosition,
+			},
+			valid: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.snapshot.Validate()
+			if tt.valid && err != nil {
+				t.Fatalf("PositionSnapshot.Validate() error = %v, want nil", err)
+			}
+			if !tt.valid && err == nil {
+				t.Fatal("PositionSnapshot.Validate() error = nil, want error")
+			}
+		})
+	}
+}
+
+func TestProviderResultContributionEstimate(t *testing.T) {
+	position := LendingPosition{
+		Wallet:   Wallet{Address: validEthAddress},
+		Protocol: ProtocolAave,
+		Network:  NetworkBase,
+	}
+	belowTarget := &HealthFactor{Value: 1.32, Classification: ClassificationWarning}
+
+	tests := []struct {
+		name    string
+		result  ProviderResult
+		wantErr bool
+	}{
+		{
+			name: "optional available estimate preserves successful health factor",
+			result: ProviderResult{
+				Position:     position,
+				HealthFactor: belowTarget,
+				ContributionEstimate: &ContributionEstimate{
+					Status:             ContributionStatusAvailable,
+					AssetSymbol:        "BTC",
+					AmountUSD:          850,
+					TargetHealthFactor: TargetHealthFactor,
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "optional unavailable estimate preserves successful health factor",
+			result: ProviderResult{
+				Position:     position,
+				HealthFactor: belowTarget,
+				ContributionEstimate: &ContributionEstimate{
+					Status:             ContributionStatusUnavailable,
+					AssetSymbol:        "BTC",
+					Reason:             "dados de preço indisponíveis",
+					TargetHealthFactor: TargetHealthFactor,
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "estimate is not allowed at target",
+			result: ProviderResult{
+				Position:     position,
+				HealthFactor: &HealthFactor{Value: 1.5, Classification: ClassificationSafe},
+				ContributionEstimate: &ContributionEstimate{
+					Status:             ContributionStatusAvailable,
+					AssetSymbol:        "BTC",
+					AmountUSD:          850,
+					TargetHealthFactor: TargetHealthFactor,
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "estimate is not allowed with provider error",
+			result: ProviderResult{
+				Position: position,
+				Error:    "connection failed",
+				ContributionEstimate: &ContributionEstimate{
+					Status:             ContributionStatusUnavailable,
+					AssetSymbol:        "BTC",
+					Reason:             "dados incompletos",
+					TargetHealthFactor: TargetHealthFactor,
+				},
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.result.Validate()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ProviderResult.Validate() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}

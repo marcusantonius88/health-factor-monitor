@@ -21,7 +21,7 @@ No setup changes are required: the Go module, standard test tooling, provider pa
 **Purpose**: Establish estimate/result types and the optional capability without changing the existing `HealthFactorProvider` contract. These tasks block both user stories.
 
 - [x] T001 [P] Add tests for contribution basis/estimate validation in `internal/domain/contribution_test.go`, covering missing/invalid numeric inputs, available estimate with positive USD amount, and unavailable estimate with a reason but no amount.
-- [ ] T002 Define `ContributionBasis`, `ContributionEstimate`, and position snapshot result types in `internal/domain/contribution.go`; extend `domain.ProviderResult` in `internal/domain/healthfactor.go` to carry an optional estimate while preserving the existing Health Factor/error invariants.
+- [x] T002 Define `ContributionBasis`, `ContributionEstimate`, and position snapshot result types in `internal/domain/contribution.go`; extend `domain.ProviderResult` in `internal/domain/healthfactor.go` to carry an optional estimate while preserving the existing Health Factor/error invariants.
 - [ ] T003 Add the optional contribution snapshot provider interface in `internal/domain/provider.go`; require `context.Context`, keep `HealthFactorProvider` source-compatible, and distinguish Health Factor retrieval errors from estimate-only unavailability.
 
 **Checkpoint**: Shared domain types compile and validate; existing providers and callers can continue using `HealthFactorProvider` unchanged.

@@ -83,9 +83,10 @@ func Classify(value float64, thresholds ...float64) string {
 // Factor from a provider for a specific position. Exactly one of HealthFactor
 // or Error is populated.
 type ProviderResult struct {
-	Position     LendingPosition
-	HealthFactor *HealthFactor
-	Error        string
+	Position             LendingPosition
+	HealthFactor         *HealthFactor
+	Error                string
+	ContributionEstimate *ContributionEstimate
 }
 
 // Validate checks that the provider result has exactly one of HealthFactor or
@@ -96,11 +97,24 @@ func (r ProviderResult) Validate() error {
 	if hasHF && hasErr {
 		return errors.New("provider result must not have both health factor and error")
 	}
+	if r.ContributionEstimate != nil && !hasHF {
+		return errors.New("provider result must have a health factor when a contribution estimate is present")
+	}
 	if !hasHF && !hasErr {
 		return errors.New("provider result must have either health factor or error")
 	}
 	if hasHF {
-		return r.HealthFactor.Validate()
+		if err := r.HealthFactor.Validate(); err != nil {
+			return err
+		}
+		if r.ContributionEstimate != nil {
+			if err := r.ContributionEstimate.Validate(); err != nil {
+				return err
+			}
+			if r.HealthFactor.Value >= TargetHealthFactor {
+				return errors.New("contribution estimate must not be present at or above target health factor")
+			}
+		}
 	}
 	return nil
 }
