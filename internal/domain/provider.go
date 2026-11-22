@@ -22,3 +22,19 @@ type HealthFactorProvider interface {
 	// Implementations MUST NOT panic and SHOULD respect context cancellation.
 	GetHealthFactor(ctx context.Context, address string) (*HealthFactor, error)
 }
+
+// ContributionSnapshotProvider is an optional capability for providers that
+// can retrieve protocol-specific data used to estimate additional collateral.
+// Embedding HealthFactorProvider keeps the existing provider contract and
+// provider registrations source-compatible.
+//
+// GetPositionSnapshot returns a snapshot with a successfully retrieved
+// Health Factor independently of estimate availability. An error means that
+// the Health Factor position read failed; estimate-only unavailability MUST be
+// represented by ContributionUnavailableReason or a missing ContributionBasis
+// on an otherwise valid snapshot.
+type ContributionSnapshotProvider interface {
+	HealthFactorProvider
+
+	GetPositionSnapshot(ctx context.Context, address string) (*PositionSnapshot, error)
+}

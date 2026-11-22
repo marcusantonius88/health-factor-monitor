@@ -321,6 +321,130 @@ func (m *mockProvider) GetHealthFactor(_ context.Context, _ string) (*HealthFact
 
 var _ HealthFactorProvider = (*mockProvider)(nil)
 
+type mockContributionSnapshotProvider struct {
+	mockProvider
+	snapshot *PositionSnapshot
+	err      error
+	context  context.Context
+}
+
+func (m *mockContributionSnapshotProvider) GetPositionSnapshot(ctx context.Context, _ string) (*PositionSnapshot, error) {
+	m.context = ctx
+	return m.snapshot, m.err
+}
+
+var _ ContributionSnapshotProvider = (*mockContributionSnapshotProvider)(nil)
+
+func TestContributionSnapshotProviderContract(t *testing.T) {
+	position := LendingPosition{
+		Wallet:   Wallet{Address: validEthAddress},
+		Protocol: ProtocolAave,
+		Network:  NetworkBase,
+	}
+	hf := &HealthFactor{Value: 1.32, Classification: ClassificationWarning}
+	snapshotWithBasis := &PositionSnapshot{
+		Position:     position,
+		HealthFactor: hf,
+		ContributionBasis: &ContributionBasis{
+			CurrentHealthFactor:          1.32,
+			EffectiveDebtUSD:             100000,
+			IncrementalLiquidationFactor: 0.82,
+			Asset:                        ContributionAsset{Symbol: "BTC", Identifier: "0xbtc"},
+			PriceUSD:                     85000,
+			AssetPrecision:               8,
+			PriceFreshnessValidated:      true,
+		},
+	}
+
+	tests := []struct {
+		name                  string
+		snapshot              *PositionSnapshot
+		readErr               error
+		wantErr               bool
+		wantSnapshotValid     bool
+		wantHealthFactor      *HealthFactor
+		wantUnavailableReason string
+	}{
+		{
+			name:              "snapshot preserves health factor and contribution basis",
+			snapshot:          snapshotWithBasis,
+			wantSnapshotValid: true,
+			wantHealthFactor:  hf,
+		},
+		{
+			name: "snapshot separates unavailable estimate from health factor",
+			snapshot: &PositionSnapshot{
+				Position:                      position,
+				HealthFactor:                  hf,
+				ContributionUnavailableReason: "dados de preço indisponíveis",
+			},
+			wantSnapshotValid:     true,
+			wantHealthFactor:      hf,
+			wantUnavailableReason: "dados de preço indisponíveis",
+		},
+		{
+			name:    "snapshot read error represents health factor retrieval failure",
+			readErr: errors.New("position unavailable"),
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.WithValue(context.Background(), struct{}{}, "context used")
+			provider := &mockContributionSnapshotProvider{
+				mockProvider: mockProvider{
+					protocol: ProtocolAave,
+					network:  NetworkBase,
+				},
+				snapshot: tt.snapshot,
+				err:      tt.readErr,
+			}
+
+			var capability ContributionSnapshotProvider = provider
+			got, err := capability.GetPositionSnapshot(ctx, validEthAddress)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("GetPositionSnapshot() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if provider.context == nil {
+				t.Fatal("GetPositionSnapshot() did not receive a context")
+			}
+			if tt.wantErr {
+				return
+			}
+			if got == nil {
+				t.Fatal("GetPositionSnapshot() returned nil snapshot")
+			}
+			if got.HealthFactor != tt.wantHealthFactor {
+				t.Errorf("GetPositionSnapshot() HealthFactor = %+v, want %+v", got.HealthFactor, tt.wantHealthFactor)
+			}
+			if tt.wantSnapshotValid {
+				if err := got.Validate(); err != nil {
+					t.Errorf("PositionSnapshot.Validate() error = %v", err)
+				}
+			}
+			if got.ContributionUnavailableReason != tt.wantUnavailableReason {
+				t.Errorf("ContributionUnavailableReason = %q, want %q", got.ContributionUnavailableReason, tt.wantUnavailableReason)
+			}
+		})
+	}
+}
+
+func TestExistingProviderDoesNotRequireSnapshotCapability(t *testing.T) {
+	provider := &mockProvider{
+		protocol: ProtocolAave,
+		network:  NetworkEthereum,
+		hf:       &HealthFactor{Value: 2.5, Classification: ClassificationSafe},
+	}
+
+	if _, ok := interface{}(provider).(ContributionSnapshotProvider); ok {
+		t.Fatal("base HealthFactorProvider unexpectedly gained a required snapshot implementation")
+	}
+	if _, ok := interface{}(provider).(HealthFactorProvider); !ok {
+		t.Fatal("existing HealthFactorProvider implementation lost base-provider compatibility")
+	}
+}
+
 func TestHealthFactorProviderContract(t *testing.T) {
 	tests := []struct {
 		name     string
