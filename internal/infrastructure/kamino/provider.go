@@ -72,6 +72,7 @@ type portfolioLendingPosition struct {
 	MaxLtv            string `json:"maxLtv"`
 	LiquidationLtv    string `json:"liquidationLtv"`
 	Leverage          string `json:"leverage"`
+	AppliedSlot       string `json:"appliedSlot"`
 }
 
 // GetHealthFactor retrieves the current health factor for the given wallet
@@ -127,6 +128,201 @@ func (p *Provider) GetHealthFactor(ctx context.Context, address string) (*domain
 	}
 
 	return nil, errors.New("no active borrow position found for address")
+}
+
+// GetPositionSnapshot retrieves the same active-borrow obligation used by
+// GetHealthFactor and adds only estimate-specific Kamino data when the position
+// is below the fixed safe threshold.
+func (p *Provider) GetPositionSnapshot(ctx context.Context, address string) (*domain.PositionSnapshot, error) {
+	hf, err := p.GetHealthFactor(ctx, address)
+	if err != nil {
+		return nil, err
+	}
+	position := domain.LendingPosition{
+		Wallet:   domain.Wallet{Address: address},
+		Protocol: domain.ProtocolKamino,
+		Network:  domain.NetworkSolana,
+	}
+	snapshot := &domain.PositionSnapshot{
+		Position:     position,
+		HealthFactor: hf,
+	}
+	if hf.Value >= domain.TargetHealthFactor {
+		return snapshot, nil
+	}
+
+	slot, err := p.getCurrentSlot(ctx)
+	if err != nil {
+		snapshot.ContributionUnavailableReason = "slot Solana indisponível"
+		return snapshot, nil
+	}
+	portfolio, positionData, err := p.getRefreshedLendingPosition(ctx, address, slot)
+	if err != nil {
+		snapshot.ContributionUnavailableReason = "portfólio Kamino não confirmado no slot atual"
+		return snapshot, nil
+	}
+	if positionData.AppliedSlot == "" {
+		snapshot.ContributionUnavailableReason = "appliedSlot Kamino indisponível"
+		return snapshot, nil
+	}
+	appliedSlot, err := strconv.ParseUint(positionData.AppliedSlot, 10, 64)
+	if err != nil || appliedSlot < slot {
+		snapshot.ContributionUnavailableReason = "portfólio Kamino não alcançou o slot solicitado"
+		return snapshot, nil
+	}
+
+	if _, err := p.getSOLOracleAtMarket(ctx, positionData.Market); err != nil {
+		snapshot.ContributionUnavailableReason = "cotação SOL Kamino indisponível ou desatualizada"
+		return snapshot, nil
+	}
+	_ = portfolio
+	snapshot.ContributionUnavailableReason = "parâmetros de elevação Kamino não confirmados"
+	return snapshot, nil
+}
+
+func (p *Provider) getCurrentSlot(ctx context.Context) (uint64, error) {
+	if strings.TrimSpace(p.rpcURL) == "" {
+		return 0, errors.New("Solana RPC endpoint is not configured")
+	}
+	body := strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"getSlot","params":[]}`)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, p.rpcURL, body)
+	if err != nil {
+		return 0, fmt.Errorf("create slot request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := p.client.Do(req)
+	if err != nil {
+		return 0, fmt.Errorf("get Solana slot: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	raw, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return 0, fmt.Errorf("read Solana slot response: %w", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return 0, fmt.Errorf("Solana slot http status %d", resp.StatusCode)
+	}
+	var parsed struct {
+		Result uint64 `json:"result"`
+		Error  *struct {
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(raw, &parsed); err != nil {
+		return 0, fmt.Errorf("decode Solana slot response: %w", err)
+	}
+	if parsed.Error != nil {
+		return 0, fmt.Errorf("Solana RPC error: %s", parsed.Error.Message)
+	}
+	if parsed.Result == 0 {
+		return 0, errors.New("Solana slot is zero")
+	}
+	return parsed.Result, nil
+}
+
+func (p *Provider) getRefreshedLendingPosition(
+	ctx context.Context,
+	address string,
+	slot uint64,
+) (*portfolioResponse, *portfolioLendingPosition, error) {
+	url := fmt.Sprintf(
+		"%s%s%s?sections=lending&minSlot=%d",
+		strings.TrimRight(p.baseURL, "/"),
+		portfolioPath,
+		address,
+		slot,
+	)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, nil, fmt.Errorf("create refreshed portfolio request: %w", err)
+	}
+	req.Header.Set("Accept", "application/json")
+	resp, err := p.client.Do(req)
+	if err != nil {
+		return nil, nil, fmt.Errorf("get refreshed portfolio: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	raw, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, nil, fmt.Errorf("read refreshed portfolio: %w", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, nil, fmt.Errorf("refreshed portfolio http status %d", resp.StatusCode)
+	}
+	var parsed portfolioResponse
+	if err := json.Unmarshal(raw, &parsed); err != nil {
+		return nil, nil, fmt.Errorf("decode refreshed portfolio: %w", err)
+	}
+	for i := range parsed.Lending {
+		position := &parsed.Lending[i]
+		if hasActiveBorrow(*position) {
+			return &parsed, position, nil
+		}
+	}
+	return nil, nil, errors.New("no active borrow position found")
+}
+
+func (p *Provider) getSOLOracleAtMarket(ctx context.Context, market string) (*float64, error) {
+	if strings.TrimSpace(market) == "" {
+		return nil, errors.New("Kamino market is missing")
+	}
+	url := strings.TrimRight(p.baseURL, "/") + "/oracles/prices?markets=all"
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("create SOL oracle request: %w", err)
+	}
+	req.Header.Set("Accept", "application/json")
+	resp, err := p.client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("get SOL oracle: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	raw, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read SOL oracle: %w", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("SOL oracle http status %d", resp.StatusCode)
+	}
+
+	const solMint = "So11111111111111111111111111111111111111112"
+	var parsed struct {
+		Markets []struct {
+			LendingMarket string `json:"lendingMarket"`
+			Prices        []struct {
+				Mint          string `json:"mint"`
+				Price         string `json:"price"`
+				Timestamp     string `json:"timestamp"`
+				MaxAgeSeconds int64  `json:"maxAgeInSeconds"`
+			} `json:"prices"`
+		} `json:"markets"`
+	}
+	if err := json.Unmarshal(raw, &parsed); err != nil {
+		return nil, fmt.Errorf("decode SOL oracle: %w", err)
+	}
+	for _, marketData := range parsed.Markets {
+		if marketData.LendingMarket != market {
+			continue
+		}
+		for _, quote := range marketData.Prices {
+			if quote.Mint != solMint {
+				continue
+			}
+			price, err := parseDecimal(quote.Price)
+			if err != nil || price <= 0 {
+				return nil, errors.New("invalid SOL oracle price")
+			}
+			quoteTime, err := time.Parse(time.RFC3339, quote.Timestamp)
+			if err != nil || quote.MaxAgeSeconds <= 0 {
+				return nil, errors.New("invalid SOL oracle freshness")
+			}
+			if time.Since(quoteTime) > time.Duration(quote.MaxAgeSeconds)*time.Second {
+				return nil, errors.New("stale SOL oracle price")
+			}
+			return &price, nil
+		}
+	}
+	return nil, errors.New("SOL oracle quote not found for market")
 }
 
 // deriveHealthFactor computes the health factor for a lending position. The
