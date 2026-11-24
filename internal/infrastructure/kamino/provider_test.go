@@ -277,3 +277,174 @@ func TestProviderIdentity(t *testing.T) {
 }
 
 var _ domain.HealthFactorProvider = (*kamino.Provider)(nil)
+
+var _ domain.ContributionSnapshotProvider = (*kamino.Provider)(nil)
+
+func TestGetPositionSnapshotKaminoSOL(t *testing.T) {
+	const (
+		marketAddress = "7u3HeHxYDLhnCoErrtycNokbQYbWGzLs6JSDqGAv5PfF"
+		solMint       = "So11111111111111111111111111111111111111112"
+	)
+
+	var portfolioQuery string
+	var oracleRequested bool
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.HasPrefix(r.URL.Path, portfolioPath):
+			portfolioQuery = r.URL.RawQuery
+			body := fmt.Sprintf(`{
+  "wallet": %q,
+  "lending": [
+    {
+      "market": "supply-only-market",
+      "obligation": "11111111111111111111111111111111",
+      "ltv": "0",
+      "liquidationLtv": "0.75"
+    },
+    {
+      "market": %q,
+      "obligation": "22222222222222222222222222222222",
+      "ltv": "0.64",
+      "liquidationLtv": "0.8",
+      "totalDepositValue": "20000",
+      "totalBorrowValue": "12800",
+      "appliedSlot": "123456",
+      "pricesRefreshedOn": "2026-11-24T10:00:00Z",
+      "positionsRefreshedOn": "2026-11-24T10:00:00Z",
+      "deposits": [
+        {"mint": %q, "reserve": "SOL-reserve", "liquidationLtv": "0.82", "symbol": "SOL"}
+      ],
+      "borrows": [
+        {"mint": "USDC-mint", "value": "12800", "borrowFactor": "1"}
+      ]
+    }
+  ],
+  "appliedSlot": "123456",
+  "pricesRefreshedOn": "2026-11-24T10:00:00Z"
+}`, userAddress, marketAddress, solMint)
+			_, _ = w.Write([]byte(body))
+		case r.URL.Path == "/oracles/prices":
+			oracleRequested = true
+			_, _ = w.Write([]byte(fmt.Sprintf(`{
+  "markets": [
+    {
+      "lendingMarket": %q,
+      "prices": [
+        {
+          "mint": %q,
+          "price": "200",
+          "timestamp": "2026-11-24T10:00:00Z",
+          "maxAgeInSeconds": 300
+        }
+      ]
+    }
+  ]
+}`, marketAddress, solMint)))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	provider := kamino.NewProvider(srv.URL)
+	snapshot, err := provider.GetPositionSnapshot(context.Background(), userAddress)
+	if err != nil {
+		t.Fatalf("GetPositionSnapshot() error = %v", err)
+	}
+	if snapshot == nil || snapshot.HealthFactor == nil {
+		t.Fatal("expected Kamino Health Factor snapshot")
+	}
+	if math.Abs(snapshot.HealthFactor.Value-1.25) > 1e-9 {
+		t.Errorf("HealthFactor.Value = %v, want 1.25", snapshot.HealthFactor.Value)
+	}
+	if snapshot.ContributionBasis == nil {
+		t.Fatal("expected SOL contribution basis")
+	}
+	if snapshot.ContributionBasis.Asset.Symbol != "SOL" {
+		t.Errorf("Asset.Symbol = %q, want SOL", snapshot.ContributionBasis.Asset.Symbol)
+	}
+	if snapshot.ContributionBasis.Asset.Identifier != solMint {
+		t.Errorf("Asset.Identifier = %q, want SOL mint %q", snapshot.ContributionBasis.Asset.Identifier, solMint)
+	}
+	if !strings.Contains(portfolioQuery, "sections=lending") {
+		t.Errorf("portfolio query = %q, want sections=lending", portfolioQuery)
+	}
+	if !strings.Contains(portfolioQuery, "minSlot=") {
+		t.Errorf("portfolio query = %q, want minSlot", portfolioQuery)
+	}
+	if !oracleRequested {
+		t.Fatal("SOL oracle price endpoint was not queried")
+	}
+}
+
+func TestGetPositionSnapshotKaminoSafeSkipsEstimateReads(t *testing.T) {
+	rpcCalls := 0
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		rpcCalls++
+		_, _ = w.Write([]byte(portfolioResponse("0.8", "0.533333")))
+	}))
+	defer srv.Close()
+
+	provider := kamino.NewProvider(srv.URL)
+	snapshot, err := provider.GetPositionSnapshot(context.Background(), userAddress)
+	if err != nil {
+		t.Fatalf("GetPositionSnapshot() error = %v", err)
+	}
+	if snapshot == nil || snapshot.HealthFactor == nil {
+		t.Fatal("expected successful safe snapshot")
+	}
+	if snapshot.HealthFactor.Value < 1.5 {
+		t.Errorf("HealthFactor.Value = %v, want at least 1.5", snapshot.HealthFactor.Value)
+	}
+	if snapshot.ContributionBasis != nil || snapshot.ContributionUnavailableReason != "" {
+		t.Fatalf("safe snapshot must not contain estimate data: %+v", snapshot)
+	}
+	if rpcCalls != 1 {
+		t.Errorf("request count = %d, want 1 portfolio read", rpcCalls)
+	}
+}
+
+func TestGetPositionSnapshotKaminoRequiresVerifiedElevationGroup(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.HasPrefix(r.URL.Path, portfolioPath):
+			_, _ = w.Write([]byte(portfolioResponse("0.8", "0.64")))
+		case r.URL.Path == "/oracles/prices":
+			_, _ = w.Write([]byte(`{
+  "markets": [
+    {
+      "lendingMarket": "7u3HeHxYDLhnCoErrtycNokbQYbWGzLs6JSDqGAv5PfF",
+      "prices": [
+        {
+          "mint": "So11111111111111111111111111111111111111112",
+          "price": "200",
+          "timestamp": "2026-11-24T10:00:00Z",
+          "maxAgeInSeconds": 300
+        }
+      ]
+    }
+  ]
+}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	provider := kamino.NewProvider(srv.URL)
+	snapshot, err := provider.GetPositionSnapshot(context.Background(), userAddress)
+	if err != nil {
+		t.Fatalf("GetPositionSnapshot() error = %v", err)
+	}
+	if snapshot == nil || snapshot.HealthFactor == nil {
+		t.Fatal("estimate-only failure must preserve the Health Factor")
+	}
+	if snapshot.ContributionBasis != nil {
+		t.Fatal("unverified elevation group must not produce a contribution basis")
+	}
+	if strings.TrimSpace(snapshot.ContributionUnavailableReason) == "" {
+		t.Fatal("unavailable SOL estimate reason must be explicit")
+	}
+}
