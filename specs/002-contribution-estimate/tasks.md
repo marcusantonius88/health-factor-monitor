@@ -45,7 +45,7 @@ No setup changes are required: the Go module, standard test tooling, provider pa
 
 ### Implementation for User Story 1
 
-- [ ] T010 [US1] Change `domain.Classify` in `internal/domain/healthfactor.go` so HF exactly 1.50 is `ClassificationSafe`; retain custom-threshold behavior and pass T004.
+- [x] T010 [US1] Change `domain.Classify` in `internal/domain/healthfactor.go` so HF exactly 1.50 is `ClassificationSafe`; retain custom-threshold behavior and pass T004.
 - [ ] T011 [US1] Implement the shared contribution calculation in `internal/domain/contribution.go` using the normalized effective debt and incremental liquidation factor; round upward at asset precision and USD cents, and reject results whose projected HF remains below 1.50.
 - [ ] T012 [US1] Extend the Aave adapter in `internal/infrastructure/aave/provider.go` to resolve the Base Pool/oracle/data provider and read account, reserve, user collateral, and eMode data at one pinned block; preserve a valid Health Factor if estimate-only reads fail.
 - [ ] T013 [US1] Implement Aave BTC reserve selection and normalized contribution inputs in `internal/infrastructure/aave/provider.go`; validate live reserve eligibility, supply state/caps, effective liquidation threshold, USD base unit, price/source freshness, and use the largest valid rounded estimate if multiple eligible BTC representations exist.

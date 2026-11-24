@@ -61,17 +61,22 @@ const (
 // critical maximum (value less than or equal to it is "critical"). Values
 // strictly between the critical maximum and the safe threshold are "warning".
 //
-// When no thresholds are provided, the defaults are used: safe > 1.5,
-// warning (1.0, 1.5], critical <= 1.0.
+// When no thresholds are provided, the defaults are used: safe >= 1.5,
+// warning (1.0, 1.5), critical <= 1.0.
 func Classify(value float64, thresholds ...float64) string {
 	safeThreshold := DefaultSafeThreshold
 	criticalMax := DefaultCriticalMaxValue
+	customThresholds := false
 	if len(thresholds) >= 2 {
 		safeThreshold = thresholds[0]
 		criticalMax = thresholds[1]
+		customThresholds = true
 	}
 	if value <= criticalMax {
 		return ClassificationCritical
+	}
+	if !customThresholds && value >= safeThreshold {
+		return ClassificationSafe
 	}
 	if value > safeThreshold {
 		return ClassificationSafe
