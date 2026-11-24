@@ -62,17 +62,34 @@ type portfolioResponse struct {
 // portfolio. Financial values (ltv, liquidationLtv) are returned as decimal
 // strings and may be null when not applicable.
 type portfolioLendingPosition struct {
-	Market            string `json:"market"`
-	Obligation        string `json:"obligation"`
-	Tag               string `json:"tag"`
-	NetValue          string `json:"netValue"`
-	TotalDepositValue string `json:"totalDepositValue"`
-	TotalBorrowValue  string `json:"totalBorrowValue"`
-	Ltv               string `json:"ltv"`
-	MaxLtv            string `json:"maxLtv"`
-	LiquidationLtv    string `json:"liquidationLtv"`
-	Leverage          string `json:"leverage"`
-	AppliedSlot       string `json:"appliedSlot"`
+	Market               string             `json:"market"`
+	Obligation           string             `json:"obligation"`
+	Tag                  string             `json:"tag"`
+	NetValue             string             `json:"netValue"`
+	TotalDepositValue    string             `json:"totalDepositValue"`
+	TotalBorrowValue     string             `json:"totalBorrowValue"`
+	Ltv                  string             `json:"ltv"`
+	MaxLtv               string             `json:"maxLtv"`
+	LiquidationLtv       string             `json:"liquidationLtv"`
+	Leverage             string             `json:"leverage"`
+	AppliedSlot          string             `json:"appliedSlot"`
+	ActiveElevationGroup string             `json:"activeElevationGroup"`
+	Deposits             []portfolioDeposit `json:"deposits"`
+	Borrows              []portfolioBorrow  `json:"borrows"`
+}
+
+type portfolioDeposit struct {
+	Mint                 string `json:"mint"`
+	Reserve              string `json:"reserve"`
+	Symbol               string `json:"symbol"`
+	LiquidationLtv       string `json:"liquidationLtv"`
+	ActiveElevationGroup string `json:"activeElevationGroup"`
+}
+
+type portfolioBorrow struct {
+	Mint         string `json:"mint"`
+	Value        string `json:"value"`
+	BorrowFactor string `json:"borrowFactor"`
 }
 
 // GetHealthFactor retrieves the current health factor for the given wallet
@@ -156,7 +173,7 @@ func (p *Provider) GetPositionSnapshot(ctx context.Context, address string) (*do
 		snapshot.ContributionUnavailableReason = "slot Solana indisponível"
 		return snapshot, nil
 	}
-	portfolio, positionData, err := p.getRefreshedLendingPosition(ctx, address, slot)
+	_, positionData, err := p.getRefreshedLendingPosition(ctx, address, slot)
 	if err != nil {
 		snapshot.ContributionUnavailableReason = "portfólio Kamino não confirmado no slot atual"
 		return snapshot, nil
@@ -171,12 +188,17 @@ func (p *Provider) GetPositionSnapshot(ctx context.Context, address string) (*do
 		return snapshot, nil
 	}
 
-	if _, err := p.getSOLOracleAtMarket(ctx, positionData.Market); err != nil {
+	solPrice, err := p.getSOLOracleAtMarket(ctx, positionData.Market)
+	if err != nil {
 		snapshot.ContributionUnavailableReason = "cotação SOL Kamino indisponível ou desatualizada"
 		return snapshot, nil
 	}
-	_ = portfolio
-	snapshot.ContributionUnavailableReason = "parâmetros de elevação Kamino não confirmados"
+	basis, err := buildSOLContributionBasis(positionData, hf, solPrice)
+	if err != nil {
+		snapshot.ContributionUnavailableReason = err.Error()
+		return snapshot, nil
+	}
+	snapshot.ContributionBasis = basis
 	return snapshot, nil
 }
 
@@ -323,6 +345,75 @@ func (p *Provider) getSOLOracleAtMarket(ctx context.Context, market string) (*fl
 		}
 	}
 	return nil, errors.New("SOL oracle quote not found for market")
+}
+
+func buildSOLContributionBasis(
+	position *portfolioLendingPosition,
+	hf *domain.HealthFactor,
+	solPrice *float64,
+) (*domain.ContributionBasis, error) {
+	if position == nil || hf == nil || solPrice == nil {
+		return nil, errors.New("dados de contribuição SOL incompletos")
+	}
+	if strings.TrimSpace(position.ActiveElevationGroup) == "" {
+		return nil, errors.New("grupo de elevação ativo Kamino não confirmado")
+	}
+
+	const solMint = "So11111111111111111111111111111111111111112"
+	var solDeposit *portfolioDeposit
+	for i := range position.Deposits {
+		deposit := &position.Deposits[i]
+		if deposit.Mint == solMint &&
+			strings.EqualFold(deposit.Symbol, "SOL") &&
+			deposit.ActiveElevationGroup == position.ActiveElevationGroup {
+			solDeposit = deposit
+			break
+		}
+	}
+	if solDeposit == nil {
+		return nil, errors.New("reserva SOL elegível não confirmada")
+	}
+	liquidationLtv, err := parseDecimal(solDeposit.LiquidationLtv)
+	if err != nil || liquidationLtv <= 0 {
+		return nil, errors.New("liquidação SOL Kamino não confirmada")
+	}
+
+	effectiveDebt := 0.0
+	if len(position.Borrows) == 0 {
+		effectiveDebt, err = parseDecimal(position.TotalBorrowValue)
+	} else {
+		for _, borrow := range position.Borrows {
+			value, err := parseDecimal(borrow.Value)
+			if err != nil || value < 0 {
+				return nil, errors.New("valor de dívida Kamino incompleto")
+			}
+			factor := 1.0
+			if strings.TrimSpace(borrow.BorrowFactor) != "" {
+				factor, err = parseDecimal(borrow.BorrowFactor)
+				if err != nil || factor <= 0 {
+					return nil, errors.New("borrow factor Kamino inválido")
+				}
+			}
+			effectiveDebt += value * factor
+		}
+	}
+	if err != nil || effectiveDebt <= 0 || *solPrice <= 0 {
+		return nil, errors.New("dados de dívida ou preço SOL inválidos")
+	}
+
+	basis := &domain.ContributionBasis{
+		CurrentHealthFactor:          hf.Value,
+		EffectiveDebtUSD:             effectiveDebt,
+		IncrementalLiquidationFactor: liquidationLtv,
+		Asset:                        domain.ContributionAsset{Symbol: "SOL", Identifier: solMint},
+		PriceUSD:                     *solPrice,
+		AssetPrecision:               9,
+		PriceFreshnessValidated:      true,
+	}
+	if err := basis.Validate(); err != nil {
+		return nil, err
+	}
+	return basis, nil
 }
 
 // deriveHealthFactor computes the health factor for a lending position. The

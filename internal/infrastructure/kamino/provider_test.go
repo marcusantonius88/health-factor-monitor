@@ -2,6 +2,7 @@ package kamino_test
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math"
 	"net/http"
@@ -290,6 +291,15 @@ func TestGetPositionSnapshotKaminoSOL(t *testing.T) {
 	var oracleRequested bool
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			var body struct {
+				Method string `json:"method"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&body); err == nil && body.Method == "getSlot" {
+				_, _ = w.Write([]byte(`{"jsonrpc":"2.0","id":1,"result":123456}`))
+				return
+			}
+		}
 		switch {
 		case strings.HasPrefix(r.URL.Path, portfolioPath):
 			portfolioQuery = r.URL.RawQuery
@@ -310,10 +320,11 @@ func TestGetPositionSnapshotKaminoSOL(t *testing.T) {
       "totalDepositValue": "20000",
       "totalBorrowValue": "12800",
       "appliedSlot": "123456",
+      "activeElevationGroup": "group-1",
       "pricesRefreshedOn": "2026-11-24T10:00:00Z",
       "positionsRefreshedOn": "2026-11-24T10:00:00Z",
       "deposits": [
-        {"mint": %q, "reserve": "SOL-reserve", "liquidationLtv": "0.82", "symbol": "SOL"}
+        {"mint": %q, "reserve": "SOL-reserve", "liquidationLtv": "0.82", "symbol": "SOL", "activeElevationGroup": "group-1"}
       ],
       "borrows": [
         {"mint": "USDC-mint", "value": "12800", "borrowFactor": "1"}
@@ -334,20 +345,20 @@ func TestGetPositionSnapshotKaminoSOL(t *testing.T) {
         {
           "mint": %q,
           "price": "200",
-          "timestamp": "2026-11-24T10:00:00Z",
+          "timestamp": %q,
           "maxAgeInSeconds": 300
         }
       ]
     }
   ]
-}`, marketAddress, solMint)))
+}`, marketAddress, solMint, time.Now().UTC().Format(time.RFC3339))))
 		default:
 			http.NotFound(w, r)
 		}
 	}))
 	defer srv.Close()
 
-	provider := kamino.NewProvider(srv.URL)
+	provider := kamino.NewProvider(srv.URL, srv.URL)
 	snapshot, err := provider.GetPositionSnapshot(context.Background(), userAddress)
 	if err != nil {
 		t.Fatalf("GetPositionSnapshot() error = %v", err)
@@ -408,6 +419,10 @@ func TestGetPositionSnapshotKaminoSafeSkipsEstimateReads(t *testing.T) {
 
 func TestGetPositionSnapshotKaminoRequiresVerifiedElevationGroup(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			_, _ = w.Write([]byte(`{"jsonrpc":"2.0","id":1,"result":123456}`))
+			return
+		}
 		switch {
 		case strings.HasPrefix(r.URL.Path, portfolioPath):
 			_, _ = w.Write([]byte(portfolioResponse("0.8", "0.64")))
@@ -433,7 +448,7 @@ func TestGetPositionSnapshotKaminoRequiresVerifiedElevationGroup(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	provider := kamino.NewProvider(srv.URL)
+	provider := kamino.NewProvider(srv.URL, srv.URL)
 	snapshot, err := provider.GetPositionSnapshot(context.Background(), userAddress)
 	if err != nil {
 		t.Fatalf("GetPositionSnapshot() error = %v", err)
