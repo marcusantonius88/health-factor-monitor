@@ -8,6 +8,7 @@ import (
 
 	"github.com/marcus/health-factor-monitor/internal/application"
 	"github.com/marcus/health-factor-monitor/internal/domain"
+	"github.com/marcus/health-factor-monitor/internal/interfaces/cli"
 )
 
 type mockProvider struct {
@@ -327,5 +328,161 @@ func TestCheckPositionSafeSkipsSnapshotEstimateReads(t *testing.T) {
 	}
 	if results[0].ContributionEstimate != nil {
 		t.Fatalf("safe position must not have contribution estimate: %+v", results[0].ContributionEstimate)
+	}
+}
+
+func TestEstimateOnlySnapshotErrorPreservesHealthFactor(t *testing.T) {
+	position := domain.LendingPosition{
+		Wallet:   domain.Wallet{Address: "0x0000000000000000000000000000000000000001"},
+		Protocol: domain.ProtocolAave,
+		Network:  domain.NetworkBase,
+	}
+	hf := &domain.HealthFactor{Value: 1.32, Classification: domain.ClassificationWarning}
+	provider := &mockSnapshotProvider{
+		mockProvider: mockProvider{
+			protocol: domain.ProtocolAave,
+			network:  domain.NetworkBase,
+			hf:       hf,
+		},
+		snapshotErr: errors.New("oracle auxiliary request failed"),
+	}
+
+	svc := application.NewCheckService(
+		newTestConfig(position),
+		map[string]domain.HealthFactorProvider{"aave:base": provider},
+	)
+	results := svc.CheckAll(context.Background())
+
+	if len(results) != 1 {
+		t.Fatalf("got %d results, want 1", len(results))
+	}
+	result := results[0]
+	if result.Error != "" {
+		t.Errorf("estimate-only error populated Health Factor provider error: %q", result.Error)
+	}
+	if result.HealthFactor == nil || result.HealthFactor.Value != 1.32 {
+		t.Fatalf("HealthFactor = %+v, want preserved 1.32", result.HealthFactor)
+	}
+	if result.ContributionEstimate != nil {
+		t.Fatalf("snapshot read error must not create a success-shaped estimate: %+v", result.ContributionEstimate)
+	}
+	if !cli.HasSuccess(results) {
+		t.Fatal("estimate-only failure changed CLI success/exit-status behavior")
+	}
+}
+
+func TestEstimateUnavailableReasonPreservesHealthFactorAndHasNoAmount(t *testing.T) {
+	position := domain.LendingPosition{
+		Wallet:   domain.Wallet{Address: "11111111111111111111111111111111"},
+		Protocol: domain.ProtocolKamino,
+		Network:  domain.NetworkSolana,
+	}
+	hf := &domain.HealthFactor{Value: 1.08, Classification: domain.ClassificationCritical}
+	provider := &mockSnapshotProvider{
+		mockProvider: mockProvider{
+			protocol: domain.ProtocolKamino,
+			network:  domain.NetworkSolana,
+			hf:       hf,
+		},
+		snapshot: &domain.PositionSnapshot{
+			Position:                      position,
+			HealthFactor:                  hf,
+			ContributionUnavailableReason: "parâmetros de elevação não confirmados",
+		},
+	}
+
+	svc := application.NewCheckService(
+		newTestConfig(position),
+		map[string]domain.HealthFactorProvider{"kamino:solana": provider},
+	)
+	results := svc.CheckAll(context.Background())
+
+	if len(results) != 1 {
+		t.Fatalf("got %d results, want 1", len(results))
+	}
+	result := results[0]
+	if result.Error != "" {
+		t.Errorf("estimate unavailability populated provider error: %q", result.Error)
+	}
+	if result.HealthFactor == nil || result.HealthFactor.Value != 1.08 {
+		t.Fatalf("HealthFactor = %+v, want preserved 1.08", result.HealthFactor)
+	}
+	estimate := result.ContributionEstimate
+	if estimate == nil {
+		t.Fatal("expected unavailable contribution estimate")
+	}
+	if estimate.Status != domain.ContributionStatusUnavailable {
+		t.Errorf("Status = %q, want unavailable", estimate.Status)
+	}
+	if estimate.AmountUSD != 0 {
+		t.Errorf("AmountUSD = %v, want 0", estimate.AmountUSD)
+	}
+	if estimate.Reason == "" {
+		t.Fatal("unavailable estimate reason must be explicit")
+	}
+	if err := result.Validate(); err != nil {
+		t.Fatalf("ProviderResult.Validate() error = %v", err)
+	}
+}
+
+func TestEstimateFailureDoesNotSuppressOtherPositions(t *testing.T) {
+	aavePosition := domain.LendingPosition{
+		Wallet:   domain.Wallet{Address: "0x0000000000000000000000000000000000000001"},
+		Protocol: domain.ProtocolAave,
+		Network:  domain.NetworkBase,
+	}
+	kaminoPosition := domain.LendingPosition{
+		Wallet:   domain.Wallet{Address: "11111111111111111111111111111111"},
+		Protocol: domain.ProtocolKamino,
+		Network:  domain.NetworkSolana,
+	}
+
+	aaveHF := &domain.HealthFactor{Value: 1.32, Classification: domain.ClassificationWarning}
+	kaminoHF := &domain.HealthFactor{Value: 1.08, Classification: domain.ClassificationCritical}
+	aaveProvider := &mockSnapshotProvider{
+		mockProvider: mockProvider{
+			protocol: domain.ProtocolAave,
+			network:  domain.NetworkBase,
+			hf:       aaveHF,
+		},
+		snapshotErr: errors.New("Aave reserve data unavailable"),
+	}
+	kaminoProvider := &mockSnapshotProvider{
+		mockProvider: mockProvider{
+			protocol: domain.ProtocolKamino,
+			network:  domain.NetworkSolana,
+			hf:       kaminoHF,
+		},
+		snapshot: &domain.PositionSnapshot{
+			Position:                      kaminoPosition,
+			HealthFactor:                  kaminoHF,
+			ContributionUnavailableReason: "dados SOL incompletos",
+		},
+	}
+
+	svc := application.NewCheckService(
+		newTestConfig(aavePosition, kaminoPosition),
+		map[string]domain.HealthFactorProvider{
+			"aave:base":     aaveProvider,
+			"kamino:solana": kaminoProvider,
+		},
+	)
+	results := svc.CheckAll(context.Background())
+
+	if len(results) != 2 {
+		t.Fatalf("got %d results, want 2", len(results))
+	}
+	if results[0].Error != "" || results[0].HealthFactor == nil {
+		t.Errorf("Aave result was suppressed: %+v", results[0])
+	}
+	if results[1].Error != "" || results[1].HealthFactor == nil {
+		t.Errorf("Kamino result was suppressed: %+v", results[1])
+	}
+	if results[1].ContributionEstimate == nil ||
+		results[1].ContributionEstimate.Status != domain.ContributionStatusUnavailable {
+		t.Errorf("Kamino unavailable estimate = %+v, want unavailable", results[1].ContributionEstimate)
+	}
+	if !cli.HasSuccess(results) {
+		t.Fatal("valid Health Factors should preserve CLI success")
 	}
 }

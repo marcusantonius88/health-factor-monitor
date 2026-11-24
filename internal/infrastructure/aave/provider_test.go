@@ -556,3 +556,117 @@ func TestGetPositionSnapshotRejectsUneligibleBTCData(t *testing.T) {
 		t.Fatal("unavailable BTC estimate reason must be explicit")
 	}
 }
+
+func TestGetPositionSnapshotAaveEstimateFailures(t *testing.T) {
+	tests := []struct {
+		name string
+		mode string
+	}{
+		{name: "missing BTC reserve", mode: "missing-reserve"},
+		{name: "ineligible BTC reserve", mode: "ineligible-reserve"},
+		{name: "missing BTC price", mode: "missing-price"},
+		{name: "zero BTC price", mode: "zero-price"},
+		{name: "unsupported oracle source", mode: "unsupported-oracle"},
+		{name: "unverifiable oracle freshness", mode: "stale-oracle"},
+		{name: "invalid USD base unit", mode: "invalid-base-unit"},
+		{name: "unavailable reserve configuration", mode: "missing-reserve-config"},
+		{name: "unavailable eMode or collateral data", mode: "missing-emode"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				var body struct {
+					Method string            `json:"method"`
+					Params []json.RawMessage `json:"params"`
+				}
+				if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+					t.Fatalf("decode request: %v", err)
+				}
+
+				switch body.Method {
+				case "eth_blockNumber":
+					_, _ = w.Write([]byte(rpcResult(hexUint256(t, 123456))))
+				case "eth_call":
+					if len(body.Params) == 0 {
+						t.Fatal("missing eth_call params")
+					}
+					var callParam struct {
+						To   string `json:"to"`
+						Data string `json:"data"`
+					}
+					if err := json.Unmarshal(body.Params[0], &callParam); err != nil {
+						t.Fatalf("decode eth_call param: %v", err)
+					}
+
+					switch {
+					case strings.HasPrefix(callParam.Data, "0xbf92857c"):
+						_, _ = w.Write([]byte(rpcResult(getUserAccountDataResult(t, 1320000000000000000))))
+					case strings.HasPrefix(callParam.Data, "0xd1946f7a"):
+						if tt.mode == "missing-reserve" {
+							_, _ = w.Write([]byte(rpcResult("0x" + fmt.Sprintf("%064x", 32) + fmt.Sprintf("%064x", 0))))
+						} else if tt.mode == "ineligible-reserve" {
+							addressBytes, _ := hex.DecodeString(strings.Repeat("0", 38) + "1234")
+							addressWord := fmt.Sprintf("%064x", new(big.Int).SetBytes(addressBytes))
+							_, _ = w.Write([]byte(rpcResult("0x" + fmt.Sprintf("%064x", 32) + fmt.Sprintf("%064x", 1) + addressWord)))
+						} else {
+							addressBytes, _ := hex.DecodeString(strings.TrimPrefix("0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf", "0x"))
+							addressWord := fmt.Sprintf("%064x", new(big.Int).SetBytes(addressBytes))
+							_, _ = w.Write([]byte(rpcResult("0x" + fmt.Sprintf("%064x", 32) + fmt.Sprintf("%064x", 1) + addressWord)))
+						}
+					case strings.HasPrefix(callParam.Data, "0x35ea6a75"):
+						if tt.mode == "missing-reserve-config" {
+							_, _ = w.Write([]byte(rpcError("reserve config unavailable")))
+						} else {
+							config := new(big.Int).Lsh(big.NewInt(8200), 16)
+							_, _ = w.Write([]byte(rpcResult("0x" + fmt.Sprintf("%064x", config))))
+						}
+					case strings.HasPrefix(callParam.Data, "0x3a66f3b7"):
+						if tt.mode == "missing-emode" || tt.mode == "ineligible-reserve" {
+							_, _ = w.Write([]byte(rpcError("eMode data unavailable")))
+						} else {
+							words := strings.Repeat("0", 64*7) + fmt.Sprintf("%064x", 1)
+							_, _ = w.Write([]byte(rpcResult("0x" + words)))
+						}
+					case strings.HasPrefix(callParam.Data, "0x99a88ec4"):
+						switch tt.mode {
+						case "missing-price":
+							_, _ = w.Write([]byte(rpcResult("0x")))
+						case "zero-price":
+							_, _ = w.Write([]byte(rpcResult("0x" + fmt.Sprintf("%064x", 0))))
+						case "unsupported-oracle", "stale-oracle":
+							_, _ = w.Write([]byte(rpcResult("0xzzzz")))
+						case "invalid-base-unit":
+							_, _ = w.Write([]byte(rpcResult("0x" + fmt.Sprintf("%064x", 1000000000000))))
+						default:
+							_, _ = w.Write([]byte(rpcResult("0x" + fmt.Sprintf("%064x", 8500000000000))))
+						}
+					default:
+						_, _ = w.Write([]byte(rpcResult(getUserAccountDataResult(t, 1320000000000000000))))
+					}
+				default:
+					t.Fatalf("unexpected RPC method: %s", body.Method)
+				}
+			}))
+			defer srv.Close()
+
+			provider := aave.NewProvider(srv.URL, domain.NetworkBase)
+			snapshot, err := provider.GetPositionSnapshot(context.Background(), userAddress)
+			if err != nil {
+				t.Fatalf("GetPositionSnapshot() error = %v", err)
+			}
+			if snapshot == nil || snapshot.HealthFactor == nil {
+				t.Fatal("estimate-only Aave failure must preserve the Health Factor")
+			}
+			if snapshot.HealthFactor.Value != 1.32 {
+				t.Errorf("HealthFactor.Value = %v, want 1.32", snapshot.HealthFactor.Value)
+			}
+			if snapshot.ContributionBasis != nil {
+				t.Fatalf("invalid Aave estimate data produced a basis: %+v", snapshot.ContributionBasis)
+			}
+			if strings.TrimSpace(snapshot.ContributionUnavailableReason) == "" {
+				t.Fatal("Aave estimate failure must include an unavailable reason")
+			}
+		})
+	}
+}
