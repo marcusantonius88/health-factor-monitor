@@ -69,7 +69,7 @@ No setup changes are required: the Go module, standard test tooling, provider pa
 
 - [x] T019 [P] [US2] Add application tests in `internal/application/service_test.go` proving estimate-only failure does not populate the provider's Health Factor error, suppress other positions, or change success/exit-status behavior.
 - [x] T020 [P] [US2] Add Aave failure tests in `internal/infrastructure/aave/provider_test.go` for missing/zero price, unsupported or unverifiably stale oracle source, invalid USD base unit, absent/ineligible BTC reserve, and unavailable reserve/eMode data.
-- [ ] T021 [P] [US2] Add Kamino failure tests in `internal/infrastructure/kamino/provider_test.go` for API/RPC failure, `appliedSlot < minSlot`, stale/missing SOL quote, wrong market/mint, incomplete obligation data, and unknown active elevation group.
+- [x] T021 [P] [US2] Add Kamino failure tests in `internal/infrastructure/kamino/provider_test.go` for API/RPC failure, `appliedSlot < minSlot`, stale/missing SOL quote, wrong market/mint, incomplete obligation data, and unknown active elevation group.
 - [ ] T022 [P] [US2] Add CLI tests in `internal/interfaces/cli/app_test.go` proving unavailable estimates show a reason but no numeric USD amount, token amount, or unit price; safe positions still show no contribution line.
 
 ### Implementation for User Story 2

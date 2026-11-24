@@ -463,3 +463,137 @@ func TestGetPositionSnapshotKaminoRequiresVerifiedElevationGroup(t *testing.T) {
 		t.Fatal("unavailable SOL estimate reason must be explicit")
 	}
 }
+
+func TestGetPositionSnapshotKaminoEstimateFailures(t *testing.T) {
+	const (
+		marketAddress = "7u3HeHxYDLhnCoErrtycNokbQYbWGzLs6JSDqGAv5PfF"
+		solMint       = "So11111111111111111111111111111111111111112"
+	)
+
+	tests := []struct {
+		name string
+		mode string
+	}{
+		{name: "Solana RPC failure", mode: "rpc-failure"},
+		{name: "Kamino API failure", mode: "api-failure"},
+		{name: "applied slot is behind minSlot", mode: "slot-behind"},
+		{name: "stale SOL quote", mode: "stale-quote"},
+		{name: "missing SOL quote", mode: "missing-quote"},
+		{name: "wrong oracle market", mode: "wrong-market"},
+		{name: "wrong SOL mint", mode: "wrong-mint"},
+		{name: "incomplete obligation data", mode: "incomplete-obligation"},
+		{name: "unknown active elevation group", mode: "unknown-group"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method == http.MethodPost {
+					if tt.mode == "rpc-failure" {
+						w.WriteHeader(http.StatusInternalServerError)
+						_, _ = w.Write([]byte(apiErrorBody("Solana RPC unavailable")))
+						return
+					}
+					_, _ = w.Write([]byte(`{"jsonrpc":"2.0","id":1,"result":123456}`))
+					return
+				}
+
+				if strings.HasPrefix(r.URL.Path, portfolioPath) {
+					if r.URL.Query().Get("sections") == "lending" && tt.mode == "api-failure" {
+						w.WriteHeader(http.StatusBadGateway)
+						_, _ = w.Write([]byte(apiErrorBody("Kamino API unavailable")))
+						return
+					}
+					appliedSlot := "123456"
+					if tt.mode == "slot-behind" {
+						appliedSlot = "123455"
+					}
+					activeGroup := "group-1"
+					if tt.mode == "unknown-group" {
+						activeGroup = ""
+					}
+					deposits := fmt.Sprintf(`[
+						{"mint": %q, "reserve": "SOL-reserve", "liquidationLtv": "0.82", "symbol": "SOL", "activeElevationGroup": "group-1"}
+					]`, solMint)
+					if tt.mode == "incomplete-obligation" {
+						deposits = `[]`
+					}
+					body := fmt.Sprintf(`{
+						"wallet": %q,
+						"lending": [
+							{"market": "supply-only-market", "obligation": "11111111111111111111111111111111", "ltv": "0", "liquidationLtv": "0.75"},
+							{
+								"market": %q,
+								"obligation": "22222222222222222222222222222222",
+								"ltv": "0.64",
+								"liquidationLtv": "0.8",
+								"totalDepositValue": "20000",
+								"totalBorrowValue": "12800",
+								"appliedSlot": %q,
+								"activeElevationGroup": %q,
+								"deposits": %s,
+								"borrows": [
+									{"mint": "USDC-mint", "value": "12800", "borrowFactor": "1"}
+								]
+							}
+						],
+						"appliedSlot": %q
+					}`, userAddress, marketAddress, appliedSlot, activeGroup, deposits, appliedSlot)
+					_, _ = w.Write([]byte(body))
+					return
+				}
+
+				if r.URL.Path == "/oracles/prices" {
+					lendingMarket := marketAddress
+					mint := solMint
+					price := "200"
+					timestamp := time.Now().UTC().Format(time.RFC3339)
+					if tt.mode == "wrong-market" {
+						lendingMarket = "wrong-market"
+					}
+					if tt.mode == "wrong-mint" {
+						mint = "wrong-mint"
+					}
+					if tt.mode == "missing-quote" {
+						price = ""
+					}
+					if tt.mode == "stale-quote" {
+						timestamp = time.Now().UTC().Add(-24 * time.Hour).Format(time.RFC3339)
+					}
+					_, _ = w.Write([]byte(fmt.Sprintf(`{
+						"markets": [
+							{
+								"lendingMarket": %q,
+								"prices": [
+									{"mint": %q, "price": %q, "timestamp": %q, "maxAgeInSeconds": 300}
+								]
+							}
+						]
+					}`, lendingMarket, mint, price, timestamp)))
+					return
+				}
+
+				http.NotFound(w, r)
+			}))
+			defer srv.Close()
+
+			provider := kamino.NewProvider(srv.URL, srv.URL)
+			snapshot, err := provider.GetPositionSnapshot(context.Background(), userAddress)
+			if err != nil {
+				t.Fatalf("GetPositionSnapshot() error = %v", err)
+			}
+			if snapshot == nil || snapshot.HealthFactor == nil {
+				t.Fatal("estimate-only Kamino failure must preserve the Health Factor")
+			}
+			if math.Abs(snapshot.HealthFactor.Value-1.25) > 1e-9 {
+				t.Errorf("HealthFactor.Value = %v, want 1.25", snapshot.HealthFactor.Value)
+			}
+			if snapshot.ContributionBasis != nil {
+				t.Fatalf("invalid Kamino estimate data produced a basis: %+v", snapshot.ContributionBasis)
+			}
+			if strings.TrimSpace(snapshot.ContributionUnavailableReason) == "" {
+				t.Fatal("Kamino estimate failure must include an unavailable reason")
+			}
+		})
+	}
+}
