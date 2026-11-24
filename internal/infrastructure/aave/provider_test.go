@@ -348,3 +348,171 @@ func TestProviderUsesBasePoolForBaseNetwork(t *testing.T) {
 }
 
 var _ domain.HealthFactorProvider = (*aave.Provider)(nil)
+
+var _ domain.ContributionSnapshotProvider = (*aave.Provider)(nil)
+
+func TestGetPositionSnapshotBaseBTC(t *testing.T) {
+	const (
+		cbBTCAddress = "0x00000000000000000000000000000000000000c1"
+		lBTCAddress  = "0x00000000000000000000000000000000000000c2"
+	)
+
+	var ethCalls []struct {
+		to       string
+		blockTag string
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			Method string            `json:"method"`
+			Params []json.RawMessage `json:"params"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+
+		switch body.Method {
+		case "eth_blockNumber":
+			_, _ = w.Write([]byte(rpcResult(hexUint256(t, 123456))))
+		case "eth_call":
+			if len(body.Params) == 0 {
+				t.Fatal("missing eth_call params")
+			}
+			var callParam struct {
+				To   string `json:"to"`
+				Data string `json:"data"`
+			}
+			if err := json.Unmarshal(body.Params[0], &callParam); err != nil {
+				t.Fatalf("decode eth_call param: %v", err)
+			}
+			blockTag := ""
+			if len(body.Params) > 1 {
+				if err := json.Unmarshal(body.Params[1], &blockTag); err != nil {
+					t.Fatalf("decode eth_call block tag: %v", err)
+				}
+			}
+			ethCalls = append(ethCalls, struct {
+				to       string
+				blockTag string
+			}{to: callParam.To, blockTag: blockTag})
+			_, _ = w.Write([]byte(rpcResult(getUserAccountDataResult(t, 1320000000000000000))))
+		default:
+			t.Fatalf("unexpected RPC method: %s", body.Method)
+		}
+	}))
+	defer srv.Close()
+
+	provider := aave.NewProvider(srv.URL, domain.NetworkBase)
+	snapshot, err := provider.GetPositionSnapshot(context.Background(), userAddress)
+	if err != nil {
+		t.Fatalf("GetPositionSnapshot() error = %v", err)
+	}
+	if snapshot == nil {
+		t.Fatal("GetPositionSnapshot() returned nil snapshot")
+	}
+	if snapshot.HealthFactor == nil || snapshot.HealthFactor.Value != 1.32 {
+		t.Fatalf("HealthFactor = %+v, want 1.32", snapshot.HealthFactor)
+	}
+	if snapshot.ContributionBasis == nil {
+		t.Fatal("expected BTC contribution basis, got unavailable snapshot")
+	}
+	if snapshot.ContributionBasis.Asset.Symbol != "BTC" {
+		t.Errorf("Asset.Symbol = %q, want BTC", snapshot.ContributionBasis.Asset.Symbol)
+	}
+	if snapshot.ContributionBasis.Asset.Identifier == "" {
+		t.Fatal("BTC contribution asset identifier must not be empty")
+	}
+	if !snapshot.ContributionBasis.PriceFreshnessValidated {
+		t.Fatal("BTC oracle freshness must be validated")
+	}
+	if len(ethCalls) < 2 {
+		t.Fatalf("eth_call count = %d, want account, reserve, oracle, and eMode reads", len(ethCalls))
+	}
+
+	firstBlockTag := ethCalls[0].blockTag
+	if firstBlockTag == "" {
+		t.Fatal("snapshot reads must pin a block")
+	}
+	for i, call := range ethCalls {
+		if call.blockTag != firstBlockTag {
+			t.Errorf("eth_call %d block tag = %q, want pinned block %q", i, call.blockTag, firstBlockTag)
+		}
+	}
+
+	identifier := snapshot.ContributionBasis.Asset.Identifier
+	if !strings.EqualFold(identifier, cbBTCAddress) && !strings.EqualFold(identifier, lBTCAddress) {
+		t.Errorf("BTC asset identifier = %q, want live eligible BTC reserve", identifier)
+	}
+}
+
+func TestGetPositionSnapshotSafeBaseSkipsEstimateReads(t *testing.T) {
+	rpcCalls := 0
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		rpcCalls++
+		var body struct {
+			Method string `json:"method"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		if body.Method != "eth_call" {
+			t.Fatalf("safe snapshot should not read estimate-only RPC data; method = %s", body.Method)
+		}
+		_, _ = w.Write([]byte(rpcResult(getUserAccountDataResult(t, 1500000000000000000))))
+	}))
+	defer srv.Close()
+
+	provider := aave.NewProvider(srv.URL, domain.NetworkBase)
+	snapshot, err := provider.GetPositionSnapshot(context.Background(), userAddress)
+	if err != nil {
+		t.Fatalf("GetPositionSnapshot() error = %v", err)
+	}
+	if snapshot == nil || snapshot.HealthFactor == nil {
+		t.Fatal("expected successful safe snapshot")
+	}
+	if snapshot.HealthFactor.Value != 1.5 {
+		t.Errorf("HealthFactor.Value = %v, want 1.5", snapshot.HealthFactor.Value)
+	}
+	if snapshot.ContributionBasis != nil || snapshot.ContributionUnavailableReason != "" {
+		t.Fatalf("safe snapshot must not contain estimate data: %+v", snapshot)
+	}
+	if rpcCalls != 1 {
+		t.Errorf("RPC call count = %d, want 1 account-data read", rpcCalls)
+	}
+}
+
+func TestGetPositionSnapshotRejectsUneligibleBTCData(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			Method string `json:"method"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		if body.Method == "eth_call" {
+			_, _ = w.Write([]byte(rpcResult(getUserAccountDataResult(t, 1320000000000000000))))
+			return
+		}
+		_, _ = w.Write([]byte(rpcResult(hexUint256(t, 123456))))
+	}))
+	defer srv.Close()
+
+	provider := aave.NewProvider(srv.URL, domain.NetworkBase)
+	snapshot, err := provider.GetPositionSnapshot(context.Background(), userAddress)
+	if err != nil {
+		t.Fatalf("GetPositionSnapshot() error = %v", err)
+	}
+	if snapshot == nil || snapshot.HealthFactor == nil {
+		t.Fatal("estimate-only failure must preserve the Health Factor")
+	}
+	if snapshot.HealthFactor.Value != 1.32 {
+		t.Errorf("HealthFactor.Value = %v, want 1.32", snapshot.HealthFactor.Value)
+	}
+	if snapshot.ContributionBasis != nil {
+		t.Fatal("unverified or ineligible BTC data must not produce a contribution basis")
+	}
+	if strings.TrimSpace(snapshot.ContributionUnavailableReason) == "" {
+		t.Fatal("unavailable BTC estimate reason must be explicit")
+	}
+}
