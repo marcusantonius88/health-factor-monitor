@@ -53,7 +53,7 @@ No setup changes are required: the Go module, standard test tooling, provider pa
 - [x] T015 [US1] Implement Kamino portfolio refresh in `internal/infrastructure/kamino/provider.go`: read the current Solana slot, request `sections=lending` with `minSlot`, verify `appliedSlot`, and retrieve `/oracles/prices?markets=all` with timestamp/max-age validation for the exact market and SOL mint.
 - [x] T016 [US1] Normalize Kamino obligation debt and SOL liquidation inputs in `internal/infrastructure/kamino/provider.go`, including borrow factors and verified active elevation-group terms; never substitute the hypothetical pair endpoint's auto-selected group for the obligation's active group.
 - [x] T017 [US1] Orchestrate the optional contribution snapshot in `internal/application/service.go`; use the same position/obligation as the Health Factor, calculate only below 1.50, use any refreshed snapshot Health Factor for display, and preserve independent processing of positions.
-- [ ] T018 [US1] Render available contribution estimates in `internal/interfaces/cli/app.go` as `Aporte necessário (BTC|SOL): US$ ...` directly below the matching network row, without token quantity or unit price.
+- [x] T018 [US1] Render available contribution estimates in `internal/interfaces/cli/app.go` as `Aporte necessário (BTC|SOL): US$ ...` directly below the matching network row, without token quantity or unit price.
 
 **Checkpoint**: US1 is independently demonstrable using fixtures for valid Aave/Base and Kamino/Solana inputs, with an inclusive safe threshold and no extra estimate reads for safe positions.
 

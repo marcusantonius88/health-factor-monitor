@@ -2,6 +2,8 @@ package cli
 
 import (
 	"fmt"
+	"math"
+	"strconv"
 	"strings"
 
 	"github.com/marcus/health-factor-monitor/internal/domain"
@@ -19,11 +21,11 @@ import (
 // ou com "unavailable" em caso de erro do provider.
 func FormatResults(results []domain.ProviderResult) string {
 	var buf strings.Builder
-	
+
 	// Header
 	buf.WriteString("Health Factor\n")
 	buf.WriteString("-------------\n")
-	
+
 	for _, r := range results {
 		if r.Error != "" {
 			fmt.Fprintf(&buf, "%s HF: unavailable\n", networkName(r.Position.Network))
@@ -33,9 +35,51 @@ func FormatResults(results []domain.ProviderResult) string {
 			fmt.Fprintf(&buf, "%s:\t%s no active debt\n", networkName(r.Position.Network), domain.EmojiForHealthFactor(r.HealthFactor.Value))
 		} else {
 			fmt.Fprintf(&buf, "%s:\t%s %.2f\n", networkName(r.Position.Network), domain.EmojiForHealthFactor(r.HealthFactor.Value), r.HealthFactor.Value)
+			if r.ContributionEstimate != nil &&
+				r.HealthFactor.Value < domain.TargetHealthFactor &&
+				r.ContributionEstimate.Status == domain.ContributionStatusAvailable &&
+				isSupportedContributionPosition(r.Position, r.ContributionEstimate.AssetSymbol) {
+				fmt.Fprintf(
+					&buf,
+					"\tAporte necessário (%s): US$ %s\n",
+					r.ContributionEstimate.AssetSymbol,
+					formatUSD(r.ContributionEstimate.AmountUSD),
+				)
+			}
 		}
 	}
 	return buf.String()
+}
+
+func isSupportedContributionPosition(position domain.LendingPosition, assetSymbol string) bool {
+	return (position.Protocol == domain.ProtocolAave &&
+		position.Network == domain.NetworkBase &&
+		assetSymbol == "BTC") ||
+		(position.Protocol == domain.ProtocolKamino &&
+			position.Network == domain.NetworkSolana &&
+			assetSymbol == "SOL")
+}
+
+func formatUSD(amount float64) string {
+	if math.IsNaN(amount) || math.IsInf(amount, 0) {
+		return "0,00"
+	}
+	cents := int64(math.Round(amount * 100))
+	whole := cents / 100
+	fraction := cents % 100
+
+	digits := strconv.FormatInt(whole, 10)
+	var formatted strings.Builder
+	firstGroup := len(digits) % 3
+	if firstGroup == 0 {
+		firstGroup = 3
+	}
+	formatted.WriteString(digits[:firstGroup])
+	for i := firstGroup; i < len(digits); i += 3 {
+		formatted.WriteByte('.')
+		formatted.WriteString(digits[i : i+3])
+	}
+	return fmt.Sprintf("%s,%02d", formatted.String(), fraction)
 }
 
 // networkName retorna o nome da rede com base no valor do campo Network da
