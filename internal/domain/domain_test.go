@@ -504,7 +504,9 @@ func TestClassify(t *testing.T) {
 	}{
 		{name: "safe above default", value: 2.5, want: ClassificationSafe},
 		{name: "safe above default boundary", value: 2.0, want: ClassificationSafe},
-		{name: "warning at safe boundary", value: 1.5, want: ClassificationWarning},
+		{name: "safe exactly at target", value: 1.5, want: ClassificationSafe},
+		{name: "safe just above target", value: 1.501, want: ClassificationSafe},
+		{name: "warning just below target", value: 1.499, want: ClassificationWarning},
 		{name: "warning at upper bound", value: 1.4, want: ClassificationWarning},
 		{name: "warning just above critical", value: 1.01, want: ClassificationWarning},
 		{name: "critical at critical max", value: 1.0, want: ClassificationCritical},
