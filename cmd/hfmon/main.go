@@ -63,8 +63,8 @@ func buildProviders(cfg domain.Config) map[string]domain.HealthFactorProvider {
 	if endpoint, ok := cfg.RPCEndpoints[domain.NetworkBase]; ok {
 		providers[protocolNetworkKey(domain.ProtocolAave, domain.NetworkBase)] = aave.NewProvider(endpoint, domain.NetworkBase)
 	}
-	if _, ok := cfg.RPCEndpoints[domain.NetworkSolana]; ok {
-		providers[protocolNetworkKey(domain.ProtocolKamino, domain.NetworkSolana)] = kamino.NewProvider(kaminoAPIBaseURL)
+	if solanaRPC, ok := cfg.RPCEndpoints[domain.NetworkSolana]; ok {
+		providers[protocolNetworkKey(domain.ProtocolKamino, domain.NetworkSolana)] = kamino.NewProvider(kaminoAPIBaseURL, solanaRPC)
 	}
 	return providers
 }

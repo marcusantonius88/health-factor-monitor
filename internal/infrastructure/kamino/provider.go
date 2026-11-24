@@ -28,14 +28,21 @@ const (
 // the Kamino public API.
 type Provider struct {
 	baseURL string
+	rpcURL  string
 	client  *http.Client
 }
 
 // NewProvider creates a Kamino provider that talks to the configured API base
-// URL (e.g., "https://api.kamino.finance").
-func NewProvider(baseURL string) *Provider {
+// URL (e.g., "https://api.kamino.finance") and optionally uses a Solana RPC
+// endpoint for snapshot freshness reads.
+func NewProvider(baseURL string, rpcURL ...string) *Provider {
+	rpcEndpoint := ""
+	if len(rpcURL) > 0 {
+		rpcEndpoint = rpcURL[0]
+	}
 	return &Provider{
 		baseURL: baseURL,
+		rpcURL:  rpcEndpoint,
 		client:  &http.Client{Timeout: apiTimeout},
 	}
 }
