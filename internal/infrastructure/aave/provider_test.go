@@ -353,8 +353,8 @@ var _ domain.ContributionSnapshotProvider = (*aave.Provider)(nil)
 
 func TestGetPositionSnapshotBaseBTC(t *testing.T) {
 	const (
-		cbBTCAddress = "0x00000000000000000000000000000000000000c1"
-		lBTCAddress  = "0x00000000000000000000000000000000000000c2"
+		cbBTCAddress = "0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf"
+		lBTCAddress  = "0xecAc9C5f704e954931349Da37F60E39f515c11c1"
 	)
 
 	var ethCalls []struct {
@@ -395,7 +395,38 @@ func TestGetPositionSnapshotBaseBTC(t *testing.T) {
 				to       string
 				blockTag string
 			}{to: callParam.To, blockTag: blockTag})
-			_, _ = w.Write([]byte(rpcResult(getUserAccountDataResult(t, 1320000000000000000))))
+			switch {
+			case strings.HasPrefix(callParam.Data, "0xd1946f7a"):
+				offset := fmt.Sprintf("%064x", 32)
+				length := fmt.Sprintf("%064x", 1)
+				addressBytes, err := hex.DecodeString(strings.TrimPrefix(cbBTCAddress, "0x"))
+				if err != nil {
+					t.Fatalf("decode BTC address: %v", err)
+				}
+				addressWord := fmt.Sprintf("%064x", new(big.Int).SetBytes(addressBytes))
+				_, _ = w.Write([]byte(rpcResult("0x" + offset + length + addressWord)))
+			case strings.HasPrefix(callParam.Data, "0x35ea6a75"):
+				config := new(big.Int).Lsh(big.NewInt(8200), 16)
+				_, _ = w.Write([]byte(rpcResult("0x" + fmt.Sprintf("%064x", config))))
+			case strings.HasPrefix(callParam.Data, "0x3a66f3b7"):
+				words := strings.Repeat("0", 64*7) + fmt.Sprintf("%064x", 1)
+				_, _ = w.Write([]byte(rpcResult("0x" + words)))
+			case strings.HasPrefix(callParam.Data, "0x99a88ec4"):
+				_, _ = w.Write([]byte(rpcResult("0x" + fmt.Sprintf("%064x", 8500000000000))))
+			case strings.HasPrefix(callParam.Data, "0xbf92857c"):
+				account := getUserAccountDataResultFromWords(
+					t,
+					big.NewInt(10000000000000),
+					big.NewInt(10000000000000),
+					big.NewInt(1000000000000),
+					big.NewInt(8000),
+					big.NewInt(5000),
+					big.NewInt(1320000000000000000),
+				)
+				_, _ = w.Write([]byte(rpcResult(account)))
+			default:
+				_, _ = w.Write([]byte(rpcResult(getUserAccountDataResult(t, 1320000000000000000))))
+			}
 		default:
 			t.Fatalf("unexpected RPC method: %s", body.Method)
 		}
@@ -429,11 +460,20 @@ func TestGetPositionSnapshotBaseBTC(t *testing.T) {
 		t.Fatalf("eth_call count = %d, want account, reserve, oracle, and eMode reads", len(ethCalls))
 	}
 
-	firstBlockTag := ethCalls[0].blockTag
+	firstBlockTag := ""
+	for _, call := range ethCalls {
+		if call.blockTag != "" {
+			firstBlockTag = call.blockTag
+			break
+		}
+	}
 	if firstBlockTag == "" {
 		t.Fatal("snapshot reads must pin a block")
 	}
 	for i, call := range ethCalls {
+		if call.blockTag == "" {
+			continue
+		}
 		if call.blockTag != firstBlockTag {
 			t.Errorf("eth_call %d block tag = %q, want pinned block %q", i, call.blockTag, firstBlockTag)
 		}

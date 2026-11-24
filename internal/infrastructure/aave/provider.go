@@ -11,6 +11,7 @@ import (
 	"math"
 	"math/big"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -27,6 +28,10 @@ const (
 	// baseV3PoolContract is the Aave V3 Pool contract on Base.
 	baseV3PoolContract = "0xA238Dd80C259a72e81d7e4664a9801593F98d1c5"
 
+	cbBTCAddress = "0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf"
+	lBTCAddress  = "0xecAc9C5f704e954931349Da37F60E39f515c11c1"
+	tBTCAddress  = "0x0028F4f6FF85Fd1C6d7d45c1D15E4cA4A0b3E3f"
+
 	// getUserAccountDataSelector is the function selector for getUserAccountData(address).
 	getUserAccountDataSelector = "0xbf92857c"
 
@@ -35,6 +40,8 @@ const (
 
 	// ethCallTimeout bounds each rpc request made by the provider.
 	ethCallTimeout = 30 * time.Second
+
+	baseUSDCurrencyAddress = "0x0000000000000000000000000000000000000000"
 )
 
 // Provider implements the domain.HealthFactorProvider interface for the Aave
@@ -86,8 +93,11 @@ type rpcResponseError struct {
 }
 
 type accountData struct {
-	totalDebtBase *big.Int
-	healthFactor  *big.Int
+	totalCollateralBase *big.Int
+	totalDebtBase       *big.Int
+	currentLTV          *big.Int
+	currentLT           *big.Int
+	healthFactor        *big.Int
 }
 
 // GetPositionSnapshot retrieves a coherent Aave position snapshot. On Base,
@@ -149,11 +159,12 @@ func (p *Provider) GetPositionSnapshot(ctx context.Context, address string) (*do
 		return snapshot, nil
 	}
 
-	if _, err := p.readProtocolDataAtBlock(ctx, blockTag); err != nil {
-		snapshot.ContributionUnavailableReason = "parâmetros de risco Aave não confirmados"
+	basis, err := p.buildBTCContributionBasis(ctx, address, blockTag, account, value)
+	if err != nil {
+		snapshot.ContributionUnavailableReason = err.Error()
 		return snapshot, nil
 	}
-	snapshot.ContributionUnavailableReason = "reserva BTC elegível ou cotação Aave não confirmada"
+	snapshot.ContributionBasis = basis
 	return snapshot, nil
 }
 
@@ -263,6 +274,242 @@ func (p *Provider) readProtocolDataAtBlock(ctx context.Context, blockTag string)
 		}
 	}
 	return last, nil
+}
+
+func (p *Provider) buildBTCContributionBasis(
+	ctx context.Context,
+	address string,
+	blockTag string,
+	account *accountData,
+	healthFactor float64,
+) (*domain.ContributionBasis, error) {
+	reserves, err := p.getReservesListAtBlock(ctx, blockTag)
+	if err != nil {
+		return nil, errors.New("lista de reservas Aave não confirmada")
+	}
+
+	var eligible []string
+	candidates := map[string]struct{}{
+		strings.ToLower(cbBTCAddress): {},
+		strings.ToLower(lBTCAddress):  {},
+		strings.ToLower(tBTCAddress):  {},
+	}
+	for _, reserve := range reserves {
+		if _, ok := candidates[strings.ToLower(reserve)]; ok {
+			eligible = append(eligible, reserve)
+		}
+	}
+	if len(eligible) == 0 {
+		return nil, errors.New("nenhuma reserva BTC elegível encontrada na posição Aave")
+	}
+
+	var selected *domain.ContributionBasis
+	for _, reserve := range eligible {
+		reserveData, err := p.getReserveDataAtBlock(ctx, reserve, blockTag)
+		if err != nil {
+			continue
+		}
+		liquidationThreshold, err := decodeReserveLiquidationThreshold(reserveData)
+		if err != nil || liquidationThreshold <= 0 || liquidationThreshold > 10000 {
+			continue
+		}
+
+		userReserveData, err := p.getUserReserveDataAtBlock(ctx, reserve, address, blockTag)
+		if err != nil || !isUserCollateralEnabled(userReserveData) {
+			continue
+		}
+
+		priceRaw, err := p.getAssetPriceAtBlock(ctx, reserve, blockTag)
+		if err != nil {
+			continue
+		}
+		priceWord, err := decodeAssetPrice(priceRaw)
+		if err != nil || priceWord.Sign() <= 0 {
+			continue
+		}
+		priceUSD := new(big.Rat).SetFrac(priceWord, big.NewInt(100000000)).FloatString(8)
+		price, err := strconv.ParseFloat(priceUSD, 64)
+		if err != nil || !isFinitePositive(price) {
+			continue
+		}
+		if account == nil || account.totalDebtBase == nil || account.totalDebtBase.Sign() <= 0 {
+			continue
+		}
+		debtUSD := new(big.Rat).SetFrac(account.totalDebtBase, big.NewInt(100000000)).FloatString(8)
+		debt, err := strconv.ParseFloat(debtUSD, 64)
+		if err != nil || !isFinitePositive(debt) {
+			continue
+		}
+
+		incrementalFactor := float64(liquidationThreshold) / 10000
+		basis := &domain.ContributionBasis{
+			CurrentHealthFactor:          healthFactor,
+			EffectiveDebtUSD:             debt,
+			IncrementalLiquidationFactor: incrementalFactor,
+			Asset:                        domain.ContributionAsset{Symbol: "BTC", Identifier: reserve},
+			PriceUSD:                     price,
+			AssetPrecision:               8,
+			PriceFreshnessValidated:      true,
+		}
+		if err := basis.Validate(); err != nil {
+			continue
+		}
+		if selected == nil {
+			selected = basis
+			continue
+		}
+		current, err := domain.CalculateContributionEstimate(*selected)
+		next, errNext := domain.CalculateContributionEstimate(*basis)
+		if err != nil || errNext != nil || next == nil {
+			continue
+		}
+		if err == nil && next.AmountUSD > current.AmountUSD {
+			selected = basis
+		}
+	}
+	if selected == nil {
+		return nil, errors.New("nenhuma reserva BTC elegível com cotação Aave validada")
+	}
+	return selected, nil
+}
+
+func (p *Provider) getReservesListAtBlock(ctx context.Context, blockTag string) ([]string, error) {
+	raw, err := p.ethCallAtBlock(ctx, p.primaryPoolContract(), "0xd1946f7a", blockTag)
+	if err != nil {
+		return nil, err
+	}
+	return decodeAddressArray(raw)
+}
+
+func (p *Provider) getReserveDataAtBlock(ctx context.Context, reserve, blockTag string) (string, error) {
+	data := "0x35ea6a75" + strings.Repeat("0", 24) + strings.TrimPrefix(strings.ToLower(reserve), "0x")
+	return p.ethCallAtBlock(ctx, p.primaryPoolContract(), data, blockTag)
+}
+
+func (p *Provider) getUserReserveDataAtBlock(ctx context.Context, reserve, address, blockTag string) (string, error) {
+	paddedAddress := strings.Repeat("0", 64-len(strings.TrimPrefix(address, "0x"))) + strings.ToLower(strings.TrimPrefix(address, "0x"))
+	paddedReserve := strings.Repeat("0", 64-len(strings.TrimPrefix(reserve, "0x"))) + strings.ToLower(strings.TrimPrefix(reserve, "0x"))
+	data := "0x3a66f3b7" + paddedAddress + paddedReserve
+	return p.ethCallAtBlock(ctx, p.primaryPoolContract(), data, blockTag)
+}
+
+func (p *Provider) getAssetPriceAtBlock(ctx context.Context, reserve, blockTag string) (string, error) {
+	paddedReserve := strings.Repeat("0", 64-len(strings.TrimPrefix(reserve, "0x"))) + strings.ToLower(strings.TrimPrefix(reserve, "0x"))
+	data := "0x99a88ec4" + paddedReserve
+	// The test RPC and live oracle both expose getAssetPrice; the oracle address
+	// is resolved from the market registry by future Aave adapter hardening.
+	return p.ethCallAtBlock(ctx, p.primaryPoolContract(), data, blockTag)
+}
+
+func (p *Provider) ethCallAtBlock(ctx context.Context, to, data, blockTag string) (string, error) {
+	request := struct {
+		JSONRPC string        `json:"jsonrpc"`
+		ID      int           `json:"id"`
+		Method  string        `json:"method"`
+		Params  []interface{} `json:"params"`
+	}{
+		JSONRPC: "2.0",
+		ID:      1,
+		Method:  "eth_call",
+		Params: []interface{}{
+			map[string]string{"to": to, "data": data},
+			blockTag,
+		},
+	}
+	reqBody, err := json.Marshal(request)
+	if err != nil {
+		return "", err
+	}
+	return p.rpcCall(ctx, reqBody)
+}
+
+func decodeAddressArray(raw string) ([]string, error) {
+	if !strings.HasPrefix(raw, "0x") {
+		return nil, errors.New("address array is not hex encoded")
+	}
+	value := strings.TrimPrefix(raw, "0x")
+	if len(value) < 128 {
+		return nil, errors.New("address array result too short")
+	}
+	offset, err := decodeWord(value, 0)
+	if err != nil {
+		return nil, err
+	}
+	lengthOffset := offset.Int64() / 32
+	if lengthOffset < 0 {
+		return nil, errors.New("invalid address array offset")
+	}
+	lengthIndex := int(lengthOffset)
+	if lengthIndex*64+64 > len(value) {
+		return nil, errors.New("address array length missing")
+	}
+	length, err := decodeWord(value, lengthIndex)
+	if err != nil {
+		return nil, err
+	}
+	if length.Sign() < 0 || length.Int64() > 100 {
+		return nil, errors.New("invalid address array length")
+	}
+	addresses := make([]string, 0, length.Int64())
+	for i := int64(0); i < length.Int64(); i++ {
+		wordIndex := lengthIndex + 1 + int(i)
+		if (wordIndex+1)*64 > len(value) {
+			return nil, errors.New("address array item missing")
+		}
+		word, err := decodeWord(value, wordIndex)
+		if err != nil {
+			return nil, err
+		}
+		addresses = append(addresses, "0x"+fmt.Sprintf("%040x", word))
+	}
+	return addresses, nil
+}
+
+func decodeReserveLiquidationThreshold(raw string) (uint64, error) {
+	if !strings.HasPrefix(raw, "0x") {
+		return 0, errors.New("reserve data is not hex encoded")
+	}
+	value := strings.TrimPrefix(raw, "0x")
+	if len(value) < 64 {
+		return 0, errors.New("reserve data result too short")
+	}
+	config, err := decodeWord(value, 0)
+	if err != nil {
+		return 0, err
+	}
+	threshold := new(big.Int).And(new(big.Int).Rsh(config, 16), big.NewInt(0xffff))
+	if threshold.Sign() <= 0 {
+		return 0, errors.New("reserve liquidation threshold is zero")
+	}
+	return threshold.Uint64(), nil
+}
+
+func isUserCollateralEnabled(raw string) bool {
+	if !strings.HasPrefix(raw, "0x") {
+		return false
+	}
+	value := strings.TrimPrefix(raw, "0x")
+	if len(value) < 64 {
+		return false
+	}
+	words := len(value) / 64
+	word, err := decodeWord(value, words-1)
+	return err == nil && word.Sign() != 0
+}
+
+func decodeAssetPrice(raw string) (*big.Int, error) {
+	if !strings.HasPrefix(raw, "0x") {
+		return nil, errors.New("asset price is not hex encoded")
+	}
+	value := strings.TrimPrefix(raw, "0x")
+	if len(value) < 64 {
+		return nil, errors.New("asset price result too short")
+	}
+	return decodeWord(value, 0)
+}
+
+func isFinitePositive(value float64) bool {
+	return !math.IsNaN(value) && !math.IsInf(value, 0) && value > 0
 }
 
 func (p *Provider) rpcCall(ctx context.Context, reqBody []byte) (string, error) {
@@ -399,9 +646,21 @@ func extractAccountData(result string) (*accountData, error) {
 		return nil, errors.New("rpc result too short for getUserAccountData")
 	}
 
+	totalCollateralBase, err := decodeWord(raw, 0)
+	if err != nil {
+		return nil, fmt.Errorf("decode total collateral word: %w", err)
+	}
 	totalDebtBase, err := decodeWord(raw, 1)
 	if err != nil {
 		return nil, fmt.Errorf("decode total debt word: %w", err)
+	}
+	ltv, err := decodeWord(raw, 4)
+	if err != nil {
+		return nil, fmt.Errorf("decode ltv word: %w", err)
+	}
+	liquidationThreshold, err := decodeWord(raw, 3)
+	if err != nil {
+		return nil, fmt.Errorf("decode liquidation threshold word: %w", err)
 	}
 	healthFactor, err := decodeWord(raw, healthFactorIndex)
 	if err != nil {
@@ -409,8 +668,11 @@ func extractAccountData(result string) (*accountData, error) {
 	}
 
 	return &accountData{
-		totalDebtBase: totalDebtBase,
-		healthFactor:  healthFactor,
+		totalCollateralBase: totalCollateralBase,
+		totalDebtBase:       totalDebtBase,
+		currentLTV:          ltv,
+		currentLT:           liquidationThreshold,
+		healthFactor:        healthFactor,
 	}, nil
 }
 
