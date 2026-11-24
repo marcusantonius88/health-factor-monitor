@@ -601,7 +601,16 @@ func TestGetPositionSnapshotAaveEstimateFailures(t *testing.T) {
 
 					switch {
 					case strings.HasPrefix(callParam.Data, "0xbf92857c"):
-						_, _ = w.Write([]byte(rpcResult(getUserAccountDataResult(t, 1320000000000000000))))
+						account := getUserAccountDataResultFromWords(
+							t,
+							big.NewInt(20000000000000),
+							big.NewInt(10000000000000),
+							big.NewInt(1000000000000),
+							big.NewInt(8000),
+							big.NewInt(5000),
+							big.NewInt(1320000000000000000),
+						)
+						_, _ = w.Write([]byte(rpcResult(account)))
 					case strings.HasPrefix(callParam.Data, "0xd1946f7a"):
 						if tt.mode == "missing-reserve" {
 							_, _ = w.Write([]byte(rpcResult("0x" + fmt.Sprintf("%064x", 32) + fmt.Sprintf("%064x", 0))))
@@ -637,7 +646,7 @@ func TestGetPositionSnapshotAaveEstimateFailures(t *testing.T) {
 						case "unsupported-oracle", "stale-oracle":
 							_, _ = w.Write([]byte(rpcResult("0xzzzz")))
 						case "invalid-base-unit":
-							_, _ = w.Write([]byte(rpcResult("0x" + fmt.Sprintf("%064x", 1000000000000))))
+							_, _ = w.Write([]byte(rpcResult("0x" + fmt.Sprintf("%064x", 1000000000000000000))))
 						default:
 							_, _ = w.Write([]byte(rpcResult("0x" + fmt.Sprintf("%064x", 8500000000000))))
 						}

@@ -74,10 +74,10 @@ No setup changes are required: the Go module, standard test tooling, provider pa
 
 ### Implementation for User Story 2
 
-- [ ] T023 [US2] Map Aave estimate-only price, reserve, eligibility, or freshness failures to an unavailable contribution in `internal/infrastructure/aave/provider.go` without discarding a successfully retrieved Health Factor or inventing a BTC asset/price.
-- [ ] T024 [US2] Map Kamino estimate-only API, freshness, reserve, or active-group failures to an unavailable contribution in `internal/infrastructure/kamino/provider.go`; preserve a valid Health Factor and never infer missing risk parameters.
-- [ ] T025 [US2] Update `internal/application/service.go` to carry estimate unavailability separately from provider failure and continue processing all remaining positions.
-- [ ] T026 [US2] Render the unavailable message in `internal/interfaces/cli/app.go` using the relevant BTC/SOL label and a concise reason; ensure no unsupported numeric amount is formatted.
+- [x] T023 [US2] Map Aave estimate-only price, reserve, eligibility, or freshness failures to an unavailable contribution in `internal/infrastructure/aave/provider.go` without discarding a successfully retrieved Health Factor or inventing a BTC asset/price.
+- [x] T024 [US2] Map Kamino estimate-only API, freshness, reserve, or active-group failures to an unavailable contribution in `internal/infrastructure/kamino/provider.go`; preserve a valid Health Factor and never infer missing risk parameters.
+- [x] T025 [US2] Update `internal/application/service.go` to carry estimate unavailability separately from provider failure and continue processing all remaining positions.
+- [x] T026 [US2] Render the unavailable message in `internal/interfaces/cli/app.go` using the relevant BTC/SOL label and a concise reason; ensure no unsupported numeric amount is formatted.
 
 **Checkpoint**: For every unsafe-to-calculate case, the CLI communicates unavailability, never a success-shaped fallback, while retaining other successful results.
 
@@ -87,8 +87,8 @@ No setup changes are required: the Go module, standard test tooling, provider pa
 
 **Purpose**: Document the user-visible behavior and validate the completed feature.
 
-- [ ] T027 [P] Update `README.md` with the below-1.50 USD estimate behavior, supported Aave/Base BTC and Kamino/Solana SOL assets, unavailable state, and the fact that no transactions are executed.
-- [ ] T028 Run `go test ./...` and `go vet ./...`; execute the scenarios in `specs/002-contribution-estimate/quickstart.md` with deterministic fixtures and confirm no live transaction or fixed-price assumption is used.
+- [x] T027 [P] Update `README.md` with the below-1.50 USD estimate behavior, supported Aave/Base BTC and Kamino/Solana SOL assets, unavailable state, and the fact that no transactions are executed.
+- [x] T028 Run `go test ./...` and `go vet ./...`; execute the scenarios in `specs/002-contribution-estimate/quickstart.md` with deterministic fixtures and confirm no live transaction or fixed-price assumption is used.
 
 ---
 

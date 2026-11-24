@@ -75,6 +75,7 @@ func (s *CheckService) checkPosition(ctx context.Context, pos domain.LendingPosi
 	}
 	snapshot, err := snapshotProvider.GetPositionSnapshot(ctx, pos.Wallet.Address)
 	if err != nil || snapshot == nil {
+		result.ContributionEstimate = unavailableContributionEstimate(pos, "dados auxiliares da estimativa indisponíveis")
 		return result
 	}
 	if snapshot.HealthFactor != nil {
@@ -89,29 +90,32 @@ func (s *CheckService) checkPosition(ctx context.Context, pos domain.LendingPosi
 		if reason == "" {
 			reason = "dados insuficientes para estimar o aporte"
 		}
-		result.ContributionEstimate = &domain.ContributionEstimate{
-			Status:             domain.ContributionStatusUnavailable,
-			AssetSymbol:        contributionAssetSymbol(pos),
-			Reason:             reason,
-			TargetHealthFactor: domain.TargetHealthFactor,
-		}
+		result.ContributionEstimate = unavailableContributionEstimate(pos, reason)
 		return result
 	}
 
 	estimate, err := domain.CalculateContributionEstimate(*snapshot.ContributionBasis)
 	if err != nil {
-		result.ContributionEstimate = &domain.ContributionEstimate{
-			Status:             domain.ContributionStatusUnavailable,
-			AssetSymbol:        contributionAssetSymbol(pos),
-			Reason:             "dados insuficientes para estimar o aporte",
-			TargetHealthFactor: domain.TargetHealthFactor,
-		}
+		result.ContributionEstimate = unavailableContributionEstimate(pos, "dados insuficientes para estimar o aporte")
 		return result
 	}
 	if estimate != nil {
 		result.ContributionEstimate = estimate
 	}
 	return result
+}
+
+func unavailableContributionEstimate(pos domain.LendingPosition, reason string) *domain.ContributionEstimate {
+	assetSymbol := contributionAssetSymbol(pos)
+	if assetSymbol == "" {
+		return nil
+	}
+	return &domain.ContributionEstimate{
+		Status:             domain.ContributionStatusUnavailable,
+		AssetSymbol:        assetSymbol,
+		Reason:             reason,
+		TargetHealthFactor: domain.TargetHealthFactor,
+	}
 }
 
 func contributionAssetSymbol(pos domain.LendingPosition) string {

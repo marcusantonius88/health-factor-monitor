@@ -175,7 +175,7 @@ func (p *Provider) GetPositionSnapshot(ctx context.Context, address string) (*do
 	}
 	_, positionData, err := p.getRefreshedLendingPosition(ctx, address, slot)
 	if err != nil {
-		snapshot.ContributionUnavailableReason = "portfólio Kamino não confirmado no slot atual"
+		snapshot.ContributionUnavailableReason = "dados da API Kamino indisponíveis ou incompletos"
 		return snapshot, nil
 	}
 	if positionData.AppliedSlot == "" {
@@ -338,7 +338,8 @@ func (p *Provider) getSOLOracleAtMarket(ctx context.Context, market string) (*fl
 			if err != nil || quote.MaxAgeSeconds <= 0 {
 				return nil, errors.New("invalid SOL oracle freshness")
 			}
-			if time.Since(quoteTime) > time.Duration(quote.MaxAgeSeconds)*time.Second {
+			age := time.Since(quoteTime)
+			if age < -5*time.Minute || age > time.Duration(quote.MaxAgeSeconds)*time.Second {
 				return nil, errors.New("stale SOL oracle price")
 			}
 			return &price, nil

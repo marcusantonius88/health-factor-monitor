@@ -41,6 +41,36 @@ The MVP focuses on productivity and reliability.
 - Terminal output with emoji indicators and Health Factor values;
 - Exit status `0` when at least one position succeeds, or `1` when no position succeeds.
 
+### Estimated Contribution for Safe Health Factor
+
+When a supported Aave/Base or Kamino/Solana position has a Health Factor below
+`1.50`, the CLI estimates the additional collateral needed to reach at least
+`1.50`.
+
+- Aave on Base reports the estimate for an eligible BTC-denominated collateral
+  asset accepted by the position.
+- Kamino on Solana reports the estimate for SOL.
+- Values are displayed only in USD, directly below the corresponding network
+  summary.
+- A safe position (`HF >= 1.50`) does not show an estimate or unavailable
+  contribution line.
+- If current prices or protocol risk parameters cannot be verified, the CLI
+  reports the contribution as unavailable and does not print a numeric amount.
+- The estimate is informational only. The application does not purchase,
+  deposit, or otherwise execute any transaction.
+
+Example:
+
+```text
+Health Factor
+-------------
+Base:   🟨 1.32
+        Aporte necessário (BTC): US$ 850,00
+
+Solana: 🟥 1.08
+        Aporte necessário (SOL): indisponível (dados insuficientes)
+```
+
 ### How the Application Works
 
 The CLI reads a configuration file, validates the provided data, and then queries each position using the corresponding provider. Configuration validation checks required fields, supported protocols and networks, wallet address formats, and whether an endpoint entry exists for each position's network. It does not probe endpoint availability before querying.

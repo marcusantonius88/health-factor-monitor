@@ -37,14 +37,27 @@ func FormatResults(results []domain.ProviderResult) string {
 			fmt.Fprintf(&buf, "%s:\t%s %.2f\n", networkName(r.Position.Network), domain.EmojiForHealthFactor(r.HealthFactor.Value), r.HealthFactor.Value)
 			if r.ContributionEstimate != nil &&
 				r.HealthFactor.Value < domain.TargetHealthFactor &&
-				r.ContributionEstimate.Status == domain.ContributionStatusAvailable &&
 				isSupportedContributionPosition(r.Position, r.ContributionEstimate.AssetSymbol) {
-				fmt.Fprintf(
-					&buf,
-					"\tAporte necessário (%s): US$ %s\n",
-					r.ContributionEstimate.AssetSymbol,
-					formatUSD(r.ContributionEstimate.AmountUSD),
-				)
+				switch r.ContributionEstimate.Status {
+				case domain.ContributionStatusAvailable:
+					fmt.Fprintf(
+						&buf,
+						"\tAporte necessário (%s): US$ %s\n",
+						r.ContributionEstimate.AssetSymbol,
+						formatUSD(r.ContributionEstimate.AmountUSD),
+					)
+				case domain.ContributionStatusUnavailable:
+					reason := strings.TrimSpace(r.ContributionEstimate.Reason)
+					if reason == "" {
+						reason = "dados insuficientes"
+					}
+					fmt.Fprintf(
+						&buf,
+						"\tAporte necessário (%s): indisponível (%s)\n",
+						r.ContributionEstimate.AssetSymbol,
+						reason,
+					)
+				}
 			}
 		}
 	}

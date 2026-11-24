@@ -304,32 +304,41 @@ func (p *Provider) buildBTCContributionBasis(
 	}
 
 	var selected *domain.ContributionBasis
+	reserveConfigUnavailable := false
+	collateralEligibilityUnavailable := false
+	oracleUnavailable := false
 	for _, reserve := range eligible {
 		reserveData, err := p.getReserveDataAtBlock(ctx, reserve, blockTag)
 		if err != nil {
+			reserveConfigUnavailable = true
 			continue
 		}
 		liquidationThreshold, err := decodeReserveLiquidationThreshold(reserveData)
 		if err != nil || liquidationThreshold <= 0 || liquidationThreshold > 10000 {
+			reserveConfigUnavailable = true
 			continue
 		}
 
 		userReserveData, err := p.getUserReserveDataAtBlock(ctx, reserve, address, blockTag)
 		if err != nil || !isUserCollateralEnabled(userReserveData) {
+			collateralEligibilityUnavailable = true
 			continue
 		}
 
 		priceRaw, err := p.getAssetPriceAtBlock(ctx, reserve, blockTag)
 		if err != nil {
+			oracleUnavailable = true
 			continue
 		}
 		priceWord, err := decodeAssetPrice(priceRaw)
 		if err != nil || priceWord.Sign() <= 0 {
+			oracleUnavailable = true
 			continue
 		}
 		priceUSD := new(big.Rat).SetFrac(priceWord, big.NewInt(100000000)).FloatString(8)
 		price, err := strconv.ParseFloat(priceUSD, 64)
-		if err != nil || !isFinitePositive(price) {
+		if err != nil || !isFinitePositive(price) || price > 10000000 {
+			oracleUnavailable = true
 			continue
 		}
 		if account == nil || account.totalDebtBase == nil || account.totalDebtBase.Sign() <= 0 {
@@ -368,7 +377,16 @@ func (p *Provider) buildBTCContributionBasis(
 		}
 	}
 	if selected == nil {
-		return nil, errors.New("nenhuma reserva BTC elegível com cotação Aave validada")
+		switch {
+		case reserveConfigUnavailable:
+			return nil, errors.New("parâmetros de reserva Aave não confirmados")
+		case collateralEligibilityUnavailable:
+			return nil, errors.New("collateral BTC ou dados eMode Aave não confirmados")
+		case oracleUnavailable:
+			return nil, errors.New("cotação BTC Aave indisponível ou não validada")
+		default:
+			return nil, errors.New("nenhuma reserva BTC elegível com cotação Aave validada")
+		}
 	}
 	return selected, nil
 }

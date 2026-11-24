@@ -363,8 +363,18 @@ func TestEstimateOnlySnapshotErrorPreservesHealthFactor(t *testing.T) {
 	if result.HealthFactor == nil || result.HealthFactor.Value != 1.32 {
 		t.Fatalf("HealthFactor = %+v, want preserved 1.32", result.HealthFactor)
 	}
-	if result.ContributionEstimate != nil {
-		t.Fatalf("snapshot read error must not create a success-shaped estimate: %+v", result.ContributionEstimate)
+	estimate := result.ContributionEstimate
+	if estimate == nil {
+		t.Fatal("snapshot read error must create an unavailable contribution estimate")
+	}
+	if estimate.Status != domain.ContributionStatusUnavailable {
+		t.Errorf("Status = %q, want unavailable", estimate.Status)
+	}
+	if estimate.AmountUSD != 0 {
+		t.Errorf("AmountUSD = %v, want 0", estimate.AmountUSD)
+	}
+	if estimate.Reason == "" {
+		t.Fatal("snapshot read error must include an unavailable reason")
 	}
 	if !cli.HasSuccess(results) {
 		t.Fatal("estimate-only failure changed CLI success/exit-status behavior")
