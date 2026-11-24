@@ -41,7 +41,7 @@ No setup changes are required: the Go module, standard test tooling, provider pa
 - [x] T006 [P] [US1] Add Aave/Base snapshot tests in `internal/infrastructure/aave/provider_test.go` for pinned-block reads, account data, eligible BTC reserves, effective liquidation threshold/eMode, oracle price, and conservative selection when multiple BTC reserves are eligible.
 - [x] T007 [P] [US1] Add Kamino/Solana snapshot tests in `internal/infrastructure/kamino/provider_test.go` for the selected active obligation, current-slot `minSlot`, matching `markets=all` market+SOL mint, and estimate basis only when the active elevation group is verified.
 - [x] T008 [P] [US1] Add application tests in `internal/application/service_test.go` for attaching an estimate to a successful below-target Health Factor and skipping estimate-only data/calculation at HF >= 1.50.
-- [ ] T009 [P] [US1] Add CLI tests in `internal/interfaces/cli/app_test.go` for the BTC/SOL USD line directly below the network row, and no contribution line for a safe position or an out-of-scope protocol/network.
+- [x] T009 [P] [US1] Add CLI tests in `internal/interfaces/cli/app_test.go` for the BTC/SOL USD line directly below the network row, and no contribution line for a safe position or an out-of-scope protocol/network.
 
 ### Implementation for User Story 1
 
