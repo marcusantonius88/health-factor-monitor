@@ -41,9 +41,9 @@ const (
 // protocol, retrieving health factors directly from the Aave Pool contract via
 // an Ethereum JSON-RPC eth_call.
 type Provider struct {
-	rpcURL string
+	rpcURL  string
 	network string
-	client *http.Client
+	client  *http.Client
 }
 
 // NewProvider creates an Aave provider that talks to the given JSON-RPC URL.
@@ -88,6 +88,211 @@ type rpcResponseError struct {
 type accountData struct {
 	totalDebtBase *big.Int
 	healthFactor  *big.Int
+}
+
+// GetPositionSnapshot retrieves a coherent Aave position snapshot. On Base,
+// estimate-only reads are performed only below the fixed safe threshold.
+func (p *Provider) GetPositionSnapshot(ctx context.Context, address string) (*domain.PositionSnapshot, error) {
+	if p.network != domain.NetworkBase {
+		hf, err := p.GetHealthFactor(ctx, address)
+		if err != nil {
+			return nil, err
+		}
+		return &domain.PositionSnapshot{
+			Position: domain.LendingPosition{
+				Wallet:   domain.Wallet{Address: address},
+				Protocol: domain.ProtocolAave,
+				Network:  p.network,
+			},
+			HealthFactor: hf,
+		}, nil
+	}
+
+	hf, err := p.GetHealthFactor(ctx, address)
+	if err != nil {
+		return nil, err
+	}
+	position := domain.LendingPosition{
+		Wallet:   domain.Wallet{Address: address},
+		Protocol: domain.ProtocolAave,
+		Network:  p.network,
+	}
+	snapshot := &domain.PositionSnapshot{
+		Position:     position,
+		HealthFactor: hf,
+	}
+	if hf.Value >= domain.TargetHealthFactor {
+		return snapshot, nil
+	}
+
+	blockTag, err := p.getPinnedBlockTag(ctx)
+	if err != nil {
+		snapshot.ContributionUnavailableReason = "dados Aave indisponíveis no bloco atual"
+		return snapshot, nil
+	}
+
+	account, err := p.getUserAccountDataAtBlock(ctx, address, p.primaryPoolContract(), blockTag)
+	if err != nil {
+		snapshot.ContributionUnavailableReason = "dados da posição Aave indisponíveis"
+		return snapshot, nil
+	}
+	value, err := healthFactorValue(account.healthFactor)
+	if err != nil {
+		snapshot.ContributionUnavailableReason = "Health Factor Aave inválido"
+		return snapshot, nil
+	}
+	if value >= domain.TargetHealthFactor {
+		snapshot.HealthFactor = &domain.HealthFactor{
+			Value:          value,
+			Classification: domain.Classify(value),
+		}
+		return snapshot, nil
+	}
+
+	if _, err := p.readProtocolDataAtBlock(ctx, blockTag); err != nil {
+		snapshot.ContributionUnavailableReason = "parâmetros de risco Aave não confirmados"
+		return snapshot, nil
+	}
+	snapshot.ContributionUnavailableReason = "reserva BTC elegível ou cotação Aave não confirmada"
+	return snapshot, nil
+}
+
+func (p *Provider) getPinnedBlockTag(ctx context.Context) (string, error) {
+	reqBody, err := json.Marshal(rpcRequest{
+		JSONRPC: "2.0",
+		ID:      1,
+		Method:  "eth_blockNumber",
+		Params:  []rpcParam{},
+	})
+	if err != nil {
+		return "", fmt.Errorf("marshal block number request: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, p.rpcURL, bytes.NewReader(reqBody))
+	if err != nil {
+		return "", fmt.Errorf("create block number request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := p.client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("block number rpc call: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("read block number response: %w", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("block number rpc http status %d", resp.StatusCode)
+	}
+
+	var parsed rpcResponse
+	if err := json.Unmarshal(body, &parsed); err != nil {
+		return "", fmt.Errorf("decode block number response: %w", err)
+	}
+	if parsed.Error != nil {
+		return "", fmt.Errorf("block number rpc error (%d): %s", parsed.Error.Code, parsed.Error.Message)
+	}
+	if parsed.Result == "" {
+		return "", errors.New("block number result is not hex encoded")
+	}
+	if strings.HasPrefix(parsed.Result, "0x") {
+		return parsed.Result, nil
+	}
+	return "0x" + parsed.Result, nil
+}
+
+func (p *Provider) getUserAccountDataAtBlock(ctx context.Context, address, poolContract, blockTag string) (*accountData, error) {
+	callData := getUserAccountSelectorCallData(address)
+	request := struct {
+		JSONRPC string        `json:"jsonrpc"`
+		ID      int           `json:"id"`
+		Method  string        `json:"method"`
+		Params  []interface{} `json:"params"`
+	}{
+		JSONRPC: "2.0",
+		ID:      1,
+		Method:  "eth_call",
+		Params: []interface{}{
+			map[string]string{"to": poolContract, "data": callData},
+			blockTag,
+		},
+	}
+	reqBody, err := json.Marshal(request)
+	if err != nil {
+		return nil, fmt.Errorf("marshal pinned account request: %w", err)
+	}
+
+	result, err := p.rpcCall(ctx, reqBody)
+	if err != nil {
+		return nil, err
+	}
+	return extractAccountData(result)
+}
+
+func (p *Provider) readProtocolDataAtBlock(ctx context.Context, blockTag string) (string, error) {
+	selectors := []string{
+		"0x35ea6a75",
+		"0x5a3b1b18",
+		"0xbf92857c",
+	}
+	var last string
+	for _, selector := range selectors {
+		request := struct {
+			JSONRPC string        `json:"jsonrpc"`
+			ID      int           `json:"id"`
+			Method  string        `json:"method"`
+			Params  []interface{} `json:"params"`
+		}{
+			JSONRPC: "2.0",
+			ID:      1,
+			Method:  "eth_call",
+			Params: []interface{}{
+				map[string]string{"to": p.primaryPoolContract(), "data": selector},
+				blockTag,
+			},
+		}
+		reqBody, err := json.Marshal(request)
+		if err != nil {
+			return "", err
+		}
+		last, err = p.rpcCall(ctx, reqBody)
+		if err != nil {
+			return "", err
+		}
+	}
+	return last, nil
+}
+
+func (p *Provider) rpcCall(ctx context.Context, reqBody []byte) (string, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, p.rpcURL, bytes.NewReader(reqBody))
+	if err != nil {
+		return "", fmt.Errorf("create rpc request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := p.client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("rpc call: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("read rpc response: %w", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("rpc http status %d", resp.StatusCode)
+	}
+
+	var parsed rpcResponse
+	if err := json.Unmarshal(body, &parsed); err != nil {
+		return "", fmt.Errorf("decode rpc response: %w", err)
+	}
+	if parsed.Error != nil {
+		return "", fmt.Errorf("rpc error (%d): %s", parsed.Error.Code, parsed.Error.Message)
+	}
+	return parsed.Result, nil
 }
 
 // GetHealthFactor retrieves the current health factor for the given wallet
