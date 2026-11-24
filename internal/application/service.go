@@ -61,11 +61,67 @@ func (s *CheckService) checkPosition(ctx context.Context, pos domain.LendingPosi
 			Error:    err.Error(),
 		}
 	}
-
-	return domain.ProviderResult{
+	result := domain.ProviderResult{
 		Position:     pos,
 		HealthFactor: hf,
 	}
+	if hf == nil || hf.Value <= 0 || hf.Value >= domain.TargetHealthFactor {
+		return result
+	}
+
+	snapshotProvider, ok := provider.(domain.ContributionSnapshotProvider)
+	if !ok {
+		return result
+	}
+	snapshot, err := snapshotProvider.GetPositionSnapshot(ctx, pos.Wallet.Address)
+	if err != nil || snapshot == nil {
+		return result
+	}
+	if snapshot.HealthFactor != nil {
+		result.HealthFactor = snapshot.HealthFactor
+		hf = snapshot.HealthFactor
+		if hf.Value >= domain.TargetHealthFactor {
+			return result
+		}
+	}
+	if snapshot.ContributionBasis == nil {
+		reason := snapshot.ContributionUnavailableReason
+		if reason == "" {
+			reason = "dados insuficientes para estimar o aporte"
+		}
+		result.ContributionEstimate = &domain.ContributionEstimate{
+			Status:             domain.ContributionStatusUnavailable,
+			AssetSymbol:        contributionAssetSymbol(pos),
+			Reason:             reason,
+			TargetHealthFactor: domain.TargetHealthFactor,
+		}
+		return result
+	}
+
+	estimate, err := domain.CalculateContributionEstimate(*snapshot.ContributionBasis)
+	if err != nil {
+		result.ContributionEstimate = &domain.ContributionEstimate{
+			Status:             domain.ContributionStatusUnavailable,
+			AssetSymbol:        contributionAssetSymbol(pos),
+			Reason:             "dados insuficientes para estimar o aporte",
+			TargetHealthFactor: domain.TargetHealthFactor,
+		}
+		return result
+	}
+	if estimate != nil {
+		result.ContributionEstimate = estimate
+	}
+	return result
+}
+
+func contributionAssetSymbol(pos domain.LendingPosition) string {
+	if pos.Protocol == domain.ProtocolAave && pos.Network == domain.NetworkBase {
+		return "BTC"
+	}
+	if pos.Protocol == domain.ProtocolKamino && pos.Network == domain.NetworkSolana {
+		return "SOL"
+	}
+	return ""
 }
 
 func providerKey(pos domain.LendingPosition) string {
