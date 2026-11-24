@@ -26,6 +26,23 @@ func (m *mockProvider) GetHealthFactor(_ context.Context, _ string) (*domain.Hea
 
 var _ domain.HealthFactorProvider = (*mockProvider)(nil)
 
+type mockSnapshotProvider struct {
+	mockProvider
+	snapshot      *domain.PositionSnapshot
+	snapshotErr   error
+	snapshotCalls int
+}
+
+func (m *mockSnapshotProvider) GetPositionSnapshot(ctx context.Context, address string) (*domain.PositionSnapshot, error) {
+	m.snapshotCalls++
+	if m.snapshotErr != nil {
+		return nil, m.snapshotErr
+	}
+	return m.snapshot, nil
+}
+
+var _ domain.ContributionSnapshotProvider = (*mockSnapshotProvider)(nil)
+
 func newTestConfig(positions ...domain.LendingPosition) *domain.Config {
 	return &domain.Config{
 		RPCEndpoints: map[string]string{
@@ -217,4 +234,98 @@ func TestCheckByProtocol(t *testing.T) {
 			t.Fatalf("got %d results, want 0", len(results))
 		}
 	})
+}
+
+func TestCheckPositionAttachesBelowTargetContributionEstimate(t *testing.T) {
+	position := domain.LendingPosition{
+		Wallet:   domain.Wallet{Address: "0x0000000000000000000000000000000000000001"},
+		Protocol: domain.ProtocolAave,
+		Network:  domain.NetworkBase,
+	}
+	hf := &domain.HealthFactor{Value: 1.32, Classification: domain.ClassificationWarning}
+	snapshot := &domain.PositionSnapshot{
+		Position:     position,
+		HealthFactor: hf,
+		ContributionBasis: &domain.ContributionBasis{
+			CurrentHealthFactor:          1.32,
+			EffectiveDebtUSD:             100000,
+			IncrementalLiquidationFactor: 0.82,
+			Asset:                        domain.ContributionAsset{Symbol: "BTC", Identifier: "0xbtc"},
+			PriceUSD:                     85000,
+			AssetPrecision:               8,
+			PriceFreshnessValidated:      true,
+		},
+	}
+	provider := &mockSnapshotProvider{
+		mockProvider: mockProvider{
+			protocol: domain.ProtocolAave,
+			network:  domain.NetworkBase,
+			hf:       hf,
+		},
+		snapshot: snapshot,
+	}
+	providers := map[string]domain.HealthFactorProvider{
+		"aave:base": provider,
+	}
+
+	svc := application.NewCheckService(newTestConfig(position), providers)
+	results := svc.CheckAll(context.Background())
+
+	if len(results) != 1 {
+		t.Fatalf("got %d results, want 1", len(results))
+	}
+	if provider.snapshotCalls != 1 {
+		t.Errorf("snapshot calls = %d, want 1", provider.snapshotCalls)
+	}
+	if results[0].HealthFactor == nil || results[0].HealthFactor.Value != 1.32 {
+		t.Fatalf("HealthFactor = %+v, want 1.32", results[0].HealthFactor)
+	}
+	if results[0].Error != "" {
+		t.Fatalf("estimate path changed Health Factor result into provider error: %q", results[0].Error)
+	}
+	if results[0].ContributionEstimate == nil {
+		t.Fatal("expected contribution estimate for below-target position")
+	}
+	if err := results[0].Validate(); err != nil {
+		t.Fatalf("ProviderResult.Validate() error = %v", err)
+	}
+}
+
+func TestCheckPositionSafeSkipsSnapshotEstimateReads(t *testing.T) {
+	position := domain.LendingPosition{
+		Wallet:   domain.Wallet{Address: "11111111111111111111111111111111"},
+		Protocol: domain.ProtocolKamino,
+		Network:  domain.NetworkSolana,
+	}
+	hf := &domain.HealthFactor{Value: 1.5, Classification: domain.ClassificationSafe}
+	provider := &mockSnapshotProvider{
+		mockProvider: mockProvider{
+			protocol: domain.ProtocolKamino,
+			network:  domain.NetworkSolana,
+			hf:       hf,
+		},
+		snapshot: &domain.PositionSnapshot{
+			Position:     position,
+			HealthFactor: hf,
+		},
+	}
+	providers := map[string]domain.HealthFactorProvider{
+		"kamino:solana": provider,
+	}
+
+	svc := application.NewCheckService(newTestConfig(position), providers)
+	results := svc.CheckAll(context.Background())
+
+	if len(results) != 1 {
+		t.Fatalf("got %d results, want 1", len(results))
+	}
+	if provider.snapshotCalls != 0 {
+		t.Errorf("snapshot calls = %d, want 0 for safe position", provider.snapshotCalls)
+	}
+	if results[0].HealthFactor == nil || results[0].HealthFactor.Value != 1.5 {
+		t.Fatalf("HealthFactor = %+v, want 1.5", results[0].HealthFactor)
+	}
+	if results[0].ContributionEstimate != nil {
+		t.Fatalf("safe position must not have contribution estimate: %+v", results[0].ContributionEstimate)
+	}
 }
