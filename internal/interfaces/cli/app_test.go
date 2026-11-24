@@ -2,6 +2,7 @@ package cli
 
 import (
 	"math"
+	"strings"
 	"testing"
 
 	"github.com/marcus/health-factor-monitor/internal/domain"
@@ -116,5 +117,58 @@ func TestFormatResultsOmitsContributionLinesForSafeAndOutOfScope(t *testing.T) {
 		"Ethereum:\t🟨 1.32\n"
 	if got != want {
 		t.Fatalf("FormatResults() = %q, want %q", got, want)
+	}
+}
+
+func TestFormatResultsUnavailableContributionEstimates(t *testing.T) {
+	results := []domain.ProviderResult{
+		{
+			Position: domain.LendingPosition{
+				Protocol: domain.ProtocolAave,
+				Network:  domain.NetworkBase,
+			},
+			HealthFactor: &domain.HealthFactor{
+				Value:          1.32,
+				Classification: domain.ClassificationWarning,
+			},
+			ContributionEstimate: &domain.ContributionEstimate{
+				Status:             domain.ContributionStatusUnavailable,
+				AssetSymbol:        "BTC",
+				Reason:             "dados de preço indisponíveis",
+				TargetHealthFactor: domain.TargetHealthFactor,
+			},
+		},
+		{
+			Position: domain.LendingPosition{
+				Protocol: domain.ProtocolKamino,
+				Network:  domain.NetworkSolana,
+			},
+			HealthFactor: &domain.HealthFactor{
+				Value:          1.08,
+				Classification: domain.ClassificationCritical,
+			},
+			ContributionEstimate: &domain.ContributionEstimate{
+				Status:             domain.ContributionStatusUnavailable,
+				AssetSymbol:        "SOL",
+				Reason:             "parâmetros de risco não confirmados",
+				TargetHealthFactor: domain.TargetHealthFactor,
+			},
+		},
+	}
+
+	got := FormatResults(results)
+	want := "Health Factor\n-------------\n" +
+		"Base:\t🟨 1.32\n" +
+		"\tAporte necessário (BTC): indisponível (dados de preço indisponíveis)\n" +
+		"Solana:\t🟥 1.08\n" +
+		"\tAporte necessário (SOL): indisponível (parâmetros de risco não confirmados)\n"
+	if got != want {
+		t.Fatalf("FormatResults() = %q, want %q", got, want)
+	}
+
+	for _, forbidden := range []string{"US$", "850", "620", "BTC quantity", "SOL quantity", "unit price"} {
+		if strings.Contains(got, forbidden) {
+			t.Errorf("unavailable output contains prohibited text %q: %q", forbidden, got)
+		}
 	}
 }
