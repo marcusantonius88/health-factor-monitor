@@ -37,7 +37,7 @@ No setup changes are required: the Go module, standard test tooling, provider pa
 ### Tests for User Story 1
 
 - [x] T004 [P] [US1] Add classification tests for HF just below, exactly at, and just above 1.50 in `internal/domain/domain_test.go`; the exact boundary must expect `ClassificationSafe`.
-- [ ] T005 [P] [US1] Add shared estimator tests in `internal/domain/contribution_test.go` for the normalized calculation, values already at target, tiny deficits, upward asset-unit/USD-cent rounding, projected HF validation, and invalid risk factors.
+- [x] T005 [P] [US1] Add shared estimator tests in `internal/domain/contribution_test.go` for the normalized calculation, values already at target, tiny deficits, upward asset-unit/USD-cent rounding, projected HF validation, and invalid risk factors.
 - [ ] T006 [P] [US1] Add Aave/Base snapshot tests in `internal/infrastructure/aave/provider_test.go` for pinned-block reads, account data, eligible BTC reserves, effective liquidation threshold/eMode, oracle price, and conservative selection when multiple BTC reserves are eligible.
 - [ ] T007 [P] [US1] Add Kamino/Solana snapshot tests in `internal/infrastructure/kamino/provider_test.go` for the selected active obligation, current-slot `minSlot`, matching `markets=all` market+SOL mint, and estimate basis only when the active elevation group is verified.
 - [ ] T008 [P] [US1] Add application tests in `internal/application/service_test.go` for attaching an estimate to a successful below-target Health Factor and skipping estimate-only data/calculation at HF >= 1.50.

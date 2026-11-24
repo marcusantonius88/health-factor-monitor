@@ -497,3 +497,171 @@ func TestProviderResultContributionEstimate(t *testing.T) {
 		})
 	}
 }
+
+func TestCalculateContributionEstimate(t *testing.T) {
+	tests := []struct {
+		name       string
+		basis      ContributionBasis
+		wantAmount float64
+		wantNil    bool
+		wantErr    bool
+	}{
+		{
+			name: "normalized BTC contribution reaches target",
+			basis: ContributionBasis{
+				CurrentHealthFactor:          1.32,
+				EffectiveDebtUSD:             100000,
+				IncrementalLiquidationFactor: 0.82,
+				Asset:                        ContributionAsset{Symbol: "BTC", Identifier: "0xbtc"},
+				PriceUSD:                     85000,
+				AssetPrecision:               8,
+				PriceFreshnessValidated:      true,
+			},
+			wantAmount: 21951.22,
+		},
+		{
+			name: "tiny deficit is rounded up and remains positive",
+			basis: ContributionBasis{
+				CurrentHealthFactor:          1.4999,
+				EffectiveDebtUSD:             1000,
+				IncrementalLiquidationFactor: 1,
+				Asset:                        ContributionAsset{Symbol: "SOL", Identifier: "SOL"},
+				PriceUSD:                     150,
+				AssetPrecision:               9,
+				PriceFreshnessValidated:      true,
+			},
+			wantAmount: 0.11,
+		},
+		{
+			name: "SOL contribution uses normalized debt and factor",
+			basis: ContributionBasis{
+				CurrentHealthFactor:          1.2,
+				EffectiveDebtUSD:             62000,
+				IncrementalLiquidationFactor: 0.70,
+				Asset:                        ContributionAsset{Symbol: "SOL", Identifier: "SOL"},
+				PriceUSD:                     200,
+				AssetPrecision:               9,
+				PriceFreshnessValidated:      true,
+			},
+			wantAmount: 26571.43,
+		},
+		{
+			name: "health factor already at target needs no estimate",
+			basis: ContributionBasis{
+				CurrentHealthFactor:          1.5,
+				EffectiveDebtUSD:             100000,
+				IncrementalLiquidationFactor: 0.82,
+				Asset:                        ContributionAsset{Symbol: "BTC", Identifier: "0xbtc"},
+				PriceUSD:                     85000,
+				AssetPrecision:               8,
+				PriceFreshnessValidated:      true,
+			},
+			wantNil: true,
+		},
+		{
+			name: "health factor above target needs no estimate",
+			basis: ContributionBasis{
+				CurrentHealthFactor:          1.51,
+				EffectiveDebtUSD:             100000,
+				IncrementalLiquidationFactor: 0.82,
+				Asset:                        ContributionAsset{Symbol: "BTC", Identifier: "0xbtc"},
+				PriceUSD:                     85000,
+				AssetPrecision:               8,
+				PriceFreshnessValidated:      true,
+			},
+			wantNil: true,
+		},
+		{
+			name: "invalid effective debt",
+			basis: ContributionBasis{
+				CurrentHealthFactor:          1.32,
+				EffectiveDebtUSD:             0,
+				IncrementalLiquidationFactor: 0.82,
+				Asset:                        ContributionAsset{Symbol: "BTC", Identifier: "0xbtc"},
+				PriceUSD:                     85000,
+				AssetPrecision:               8,
+				PriceFreshnessValidated:      true,
+			},
+			wantErr: true,
+		},
+		{
+			name: "invalid incremental liquidation factor",
+			basis: ContributionBasis{
+				CurrentHealthFactor:          1.32,
+				EffectiveDebtUSD:             100000,
+				IncrementalLiquidationFactor: 0,
+				Asset:                        ContributionAsset{Symbol: "BTC", Identifier: "0xbtc"},
+				PriceUSD:                     85000,
+				AssetPrecision:               8,
+				PriceFreshnessValidated:      true,
+			},
+			wantErr: true,
+		},
+		{
+			name: "invalid asset price",
+			basis: ContributionBasis{
+				CurrentHealthFactor:          1.32,
+				EffectiveDebtUSD:             100000,
+				IncrementalLiquidationFactor: 0.82,
+				Asset:                        ContributionAsset{Symbol: "BTC", Identifier: "0xbtc"},
+				PriceUSD:                     0,
+				AssetPrecision:               8,
+				PriceFreshnessValidated:      true,
+			},
+			wantErr: true,
+		},
+		{
+			name: "unvalidated price freshness",
+			basis: ContributionBasis{
+				CurrentHealthFactor:          1.32,
+				EffectiveDebtUSD:             100000,
+				IncrementalLiquidationFactor: 0.82,
+				Asset:                        ContributionAsset{Symbol: "BTC", Identifier: "0xbtc"},
+				PriceUSD:                     85000,
+				AssetPrecision:               8,
+				PriceFreshnessValidated:      false,
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			estimate, err := CalculateContributionEstimate(tt.basis)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("CalculateContributionEstimate() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if tt.wantNil {
+				if estimate != nil {
+					t.Fatalf("CalculateContributionEstimate() = %+v, want nil", estimate)
+				}
+				return
+			}
+			if tt.wantErr {
+				return
+			}
+			if estimate == nil {
+				t.Fatal("CalculateContributionEstimate() = nil, want estimate")
+			}
+			if err := estimate.Validate(); err != nil {
+				t.Fatalf("ContributionEstimate.Validate() error = %v", err)
+			}
+			if estimate.Status != ContributionStatusAvailable {
+				t.Errorf("Status = %q, want %q", estimate.Status, ContributionStatusAvailable)
+			}
+			if estimate.AssetSymbol != tt.basis.Asset.Symbol {
+				t.Errorf("AssetSymbol = %q, want %q", estimate.AssetSymbol, tt.basis.Asset.Symbol)
+			}
+			if estimate.AmountUSD != tt.wantAmount {
+				t.Errorf("AmountUSD = %.2f, want %.2f", estimate.AmountUSD, tt.wantAmount)
+			}
+
+			projectedHF := tt.basis.CurrentHealthFactor +
+				(estimate.AmountUSD*tt.basis.IncrementalLiquidationFactor)/
+					tt.basis.EffectiveDebtUSD
+			if projectedHF < TargetHealthFactor {
+				t.Errorf("projected HF = %.12f, want at least %.2f", projectedHF, TargetHealthFactor)
+			}
+		})
+	}
+}
