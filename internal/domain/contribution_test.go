@@ -517,7 +517,7 @@ func TestCalculateContributionEstimate(t *testing.T) {
 				AssetPrecision:               8,
 				PriceFreshnessValidated:      true,
 			},
-			wantAmount: 21951.22,
+			wantAmount: 21951.23,
 		},
 		{
 			name: "tiny deficit is rounded up and remains positive",

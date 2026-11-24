@@ -3,6 +3,7 @@ package domain
 import (
 	"errors"
 	"math"
+	"math/big"
 	"strings"
 )
 
@@ -84,6 +85,106 @@ func (b ContributionBasis) Validate() error {
 		return errors.New(strings.Join(errs, "; "))
 	}
 	return nil
+}
+
+// CalculateContributionEstimate calculates the minimum contribution that
+// reaches the fixed 1.50 Health Factor target. It rounds upward to the asset's
+// smallest supported unit and then to display cents, and rejects a result that
+// does not meet the target after rounding.
+func CalculateContributionEstimate(b ContributionBasis) (*ContributionEstimate, error) {
+	if !isFinitePositive(b.CurrentHealthFactor) {
+		return nil, errors.New("current health factor must be positive and finite")
+	}
+	if b.CurrentHealthFactor >= TargetHealthFactor {
+		return nil, nil
+	}
+	if err := b.Validate(); err != nil {
+		return nil, err
+	}
+	if b.Asset == (ContributionAsset{}) {
+		return nil, errors.New("contribution asset must be specified")
+	}
+	if err := b.Asset.Validate(); err != nil {
+		return nil, err
+	}
+
+	h := decimalRat(b.CurrentHealthFactor)
+	debt := decimalRat(b.EffectiveDebtUSD)
+	factor := decimalRat(b.IncrementalLiquidationFactor)
+	price := decimalRat(b.PriceUSD)
+	target := new(big.Rat).SetFloat64(TargetHealthFactor)
+
+	if h == nil || debt == nil || factor == nil || price == nil ||
+		h.Sign() <= 0 || debt.Sign() <= 0 || factor.Sign() <= 0 || price.Sign() <= 0 {
+		return nil, errors.New("contribution basis contains invalid numeric values")
+	}
+
+	deficit := new(big.Rat).Sub(target, h)
+	if deficit.Sign() <= 0 {
+		return nil, nil
+	}
+	requiredUSD := new(big.Rat).Mul(deficit, debt)
+	requiredUSD.Quo(requiredUSD, factor)
+
+	scale := new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(b.AssetPrecision)), nil)
+	scaleRat := new(big.Rat).SetInt(scale)
+	requiredQuantity := new(big.Rat).Quo(requiredUSD, price)
+	scaledQuantity := new(big.Rat).Mul(requiredQuantity, scaleRat)
+
+	scaledUnits := ceilRat(scaledQuantity)
+	if scaledUnits.Sign() <= 0 {
+		scaledUnits.SetInt64(1)
+	}
+
+	unitUSD := new(big.Rat).Mul(new(big.Rat).SetInt(scaledUnits), price)
+	unitUSD.Quo(unitUSD, scaleRat)
+	centAmount := new(big.Rat).Mul(unitUSD, big.NewRat(100, 1))
+	centUnits := ceilRat(centAmount)
+	if centUnits.Sign() <= 0 {
+		centUnits.SetInt64(1)
+	}
+
+	centUSD := new(big.Rat).SetInt(centUnits)
+	centUSD.Quo(centUSD, big.NewRat(100, 1))
+	amountUSD, _ := centUSD.Float64()
+
+	projected := new(big.Rat).Set(h)
+	addedCollateral := new(big.Rat).Mul(centUSD, factor)
+	addedCapacity := new(big.Rat).Quo(addedCollateral, debt)
+	projected.Add(projected, addedCapacity)
+	if projected.Cmp(target) < 0 {
+		return nil, errors.New("rounded contribution does not reach target health factor")
+	}
+
+	return &ContributionEstimate{
+		Status:             ContributionStatusAvailable,
+		AssetSymbol:        b.Asset.Symbol,
+		AmountUSD:          amountUSD,
+		TargetHealthFactor: TargetHealthFactor,
+	}, nil
+}
+
+func isFinitePositive(value float64) bool {
+	return !math.IsNaN(value) && !math.IsInf(value, 0) && value > 0
+}
+
+func decimalRat(value float64) *big.Rat {
+	text := big.NewFloat(value).Text('g', -1)
+	r, ok := new(big.Rat).SetString(text)
+	if !ok {
+		return nil
+	}
+	return r
+}
+
+func ceilRat(value *big.Rat) *big.Int {
+	quotient := new(big.Int)
+	remainder := new(big.Int)
+	quotient.QuoRem(value.Num(), value.Denom(), remainder)
+	if remainder.Sign() != 0 {
+		quotient.Add(quotient, big.NewInt(1))
+	}
+	return quotient
 }
 
 // ContributionEstimate is the informational result exposed to application
