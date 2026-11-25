@@ -25,6 +25,7 @@ func FormatResults(results []domain.ProviderResult) string {
 	// Header
 	buf.WriteString("Health Factor\n")
 	buf.WriteString("-------------\n")
+	buf.WriteString("HF mínimo desejável: 2,00\n")
 
 	for _, r := range results {
 		if r.Error != "" {

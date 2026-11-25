@@ -37,6 +37,15 @@ func rpcError(msg string) string {
 	return fmt.Sprintf(`{"jsonrpc":"2.0","id":1,"error":{"code":-32000,"message":%q}}`, msg)
 }
 
+func mustHexAddress(t *testing.T, address string) []byte {
+	t.Helper()
+	decoded, err := hex.DecodeString(strings.TrimPrefix(address, "0x"))
+	if err != nil {
+		t.Fatalf("decode address: %v", err)
+	}
+	return decoded
+}
+
 // getUserAccountDataResult builds the ABI-encoded result of the 6-tuple
 // returned by getUserAccountData, with the given healthFactor scaled by 1e18.
 func getUserAccountDataResult(t *testing.T, healthFactor int64) string {
@@ -396,6 +405,27 @@ func TestGetPositionSnapshotBaseBTC(t *testing.T) {
 				blockTag string
 			}{to: callParam.To, blockTag: blockTag})
 			switch {
+			case strings.HasPrefix(callParam.Data, "0xe860accb"):
+				_, _ = w.Write([]byte(rpcResult("0x" + fmt.Sprintf("%064x", new(big.Int).SetBytes(mustHexAddress(t, "0x0f43731eb8d45a581f4a36dd74f5f358bc90c73a"))))))
+			case strings.HasPrefix(callParam.Data, "0xfca513a8"):
+				_, _ = w.Write([]byte(rpcResult("0x" + fmt.Sprintf("%064x", new(big.Int).SetBytes(mustHexAddress(t, "0x2cc0fc26ed4563a5ce5e8bdcfe1a2878676ae156"))))))
+			case strings.HasPrefix(callParam.Data, "0xb316ff89"):
+				offset := fmt.Sprintf("%064x", 32)
+				length := fmt.Sprintf("%064x", 1)
+				addressBytes, err := hex.DecodeString(strings.TrimPrefix(cbBTCAddress, "0x"))
+				if err != nil {
+					t.Fatalf("decode BTC address: %v", err)
+				}
+				addressWord := fmt.Sprintf("%064x", new(big.Int).SetBytes(addressBytes))
+				_, _ = w.Write([]byte(rpcResult("0x" + offset + length + addressWord)))
+			case strings.HasPrefix(callParam.Data, "0x3e150141"):
+				config := new(big.Int).Lsh(big.NewInt(8200), 16)
+				_, _ = w.Write([]byte(rpcResult("0x" + fmt.Sprintf("%064x", config))))
+			case strings.HasPrefix(callParam.Data, "0x28dd2d01"):
+				words := strings.Repeat("0", 64*7) + fmt.Sprintf("%064x", 1)
+				_, _ = w.Write([]byte(rpcResult("0x" + words)))
+			case strings.HasPrefix(callParam.Data, "0xb3596f07"):
+				_, _ = w.Write([]byte(rpcResult("0x" + fmt.Sprintf("%064x", 8500000000000))))
 			case strings.HasPrefix(callParam.Data, "0xd1946f7a"):
 				offset := fmt.Sprintf("%064x", 32)
 				length := fmt.Sprintf("%064x", 1)
@@ -405,6 +435,14 @@ func TestGetPositionSnapshotBaseBTC(t *testing.T) {
 				}
 				addressWord := fmt.Sprintf("%064x", new(big.Int).SetBytes(addressBytes))
 				_, _ = w.Write([]byte(rpcResult("0x" + offset + length + addressWord)))
+			case strings.HasPrefix(callParam.Data, "0x3e150141"):
+				config := new(big.Int).Lsh(big.NewInt(8200), 16)
+				_, _ = w.Write([]byte(rpcResult("0x" + fmt.Sprintf("%064x", config))))
+			case strings.HasPrefix(callParam.Data, "0x28dd2d01"):
+				words := strings.Repeat("0", 64*7) + fmt.Sprintf("%064x", 1)
+				_, _ = w.Write([]byte(rpcResult("0x" + words)))
+			case strings.HasPrefix(callParam.Data, "0xb3596f07"):
+				_, _ = w.Write([]byte(rpcResult("0x" + fmt.Sprintf("%064x", 8500000000000))))
 			case strings.HasPrefix(callParam.Data, "0x35ea6a75"):
 				config := new(big.Int).Lsh(big.NewInt(8200), 16)
 				_, _ = w.Write([]byte(rpcResult("0x" + fmt.Sprintf("%064x", config))))
@@ -485,7 +523,7 @@ func TestGetPositionSnapshotBaseBTC(t *testing.T) {
 	}
 }
 
-func TestGetPositionSnapshotSafeBaseSkipsEstimateReads(t *testing.T) {
+func TestGetPositionSnapshotAtDesiredTargetSkipsEstimateReads(t *testing.T) {
 	rpcCalls := 0
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -499,7 +537,7 @@ func TestGetPositionSnapshotSafeBaseSkipsEstimateReads(t *testing.T) {
 		if body.Method != "eth_call" {
 			t.Fatalf("safe snapshot should not read estimate-only RPC data; method = %s", body.Method)
 		}
-		_, _ = w.Write([]byte(rpcResult(getUserAccountDataResult(t, 1500000000000000000))))
+		_, _ = w.Write([]byte(rpcResult(getUserAccountDataResult(t, 2000000000000000000))))
 	}))
 	defer srv.Close()
 
@@ -511,8 +549,8 @@ func TestGetPositionSnapshotSafeBaseSkipsEstimateReads(t *testing.T) {
 	if snapshot == nil || snapshot.HealthFactor == nil {
 		t.Fatal("expected successful safe snapshot")
 	}
-	if snapshot.HealthFactor.Value != 1.5 {
-		t.Errorf("HealthFactor.Value = %v, want 1.5", snapshot.HealthFactor.Value)
+	if snapshot.HealthFactor.Value != 2.0 {
+		t.Errorf("HealthFactor.Value = %v, want 2.0", snapshot.HealthFactor.Value)
 	}
 	if snapshot.ContributionBasis != nil || snapshot.ContributionUnavailableReason != "" {
 		t.Fatalf("safe snapshot must not contain estimate data: %+v", snapshot)
@@ -600,6 +638,22 @@ func TestGetPositionSnapshotAaveEstimateFailures(t *testing.T) {
 					}
 
 					switch {
+					case strings.HasPrefix(callParam.Data, "0xe860accb"):
+						_, _ = w.Write([]byte(rpcResult("0x" + fmt.Sprintf("%064x", new(big.Int).SetBytes(mustHexAddress(t, "0x0f43731eb8d45a581f4a36dd74f5f358bc90c73a"))))))
+					case strings.HasPrefix(callParam.Data, "0xfca513a8"):
+						_, _ = w.Write([]byte(rpcResult("0x" + fmt.Sprintf("%064x", new(big.Int).SetBytes(mustHexAddress(t, "0x2cc0fc26ed4563a5ce5e8bdcfe1a2878676ae156"))))))
+					case strings.HasPrefix(callParam.Data, "0xb316ff89"):
+						if tt.mode == "missing-reserve" {
+							_, _ = w.Write([]byte(rpcResult("0x" + fmt.Sprintf("%064x", 32) + fmt.Sprintf("%064x", 0))))
+						} else if tt.mode == "ineligible-reserve" {
+							addressBytes, _ := hex.DecodeString(strings.Repeat("0", 38) + "1234")
+							addressWord := fmt.Sprintf("%064x", new(big.Int).SetBytes(addressBytes))
+							_, _ = w.Write([]byte(rpcResult("0x" + fmt.Sprintf("%064x", 32) + fmt.Sprintf("%064x", 1) + addressWord)))
+						} else {
+							addressBytes, _ := hex.DecodeString(strings.TrimPrefix("0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf", "0x"))
+							addressWord := fmt.Sprintf("%064x", new(big.Int).SetBytes(addressBytes))
+							_, _ = w.Write([]byte(rpcResult("0x" + fmt.Sprintf("%064x", 32) + fmt.Sprintf("%064x", 1) + addressWord)))
+						}
 					case strings.HasPrefix(callParam.Data, "0xbf92857c"):
 						account := getUserAccountDataResultFromWords(
 							t,

@@ -54,8 +54,19 @@ func (p *Provider) Protocol() string { return domain.ProtocolKamino }
 func (p *Provider) Network() string { return domain.NetworkSolana }
 
 type portfolioResponse struct {
-	Wallet  string                     `json:"wallet"`
-	Lending []portfolioLendingPosition `json:"lending"`
+	Wallet      string                     `json:"wallet"`
+	Lending     []portfolioLendingPosition `json:"lending"`
+	AppliedSlot string                     `json:"appliedSlot"`
+	Sections    portfolioSections          `json:"sections"`
+}
+
+type portfolioSections struct {
+	Lending portfolioSection `json:"lending"`
+}
+
+type portfolioSection struct {
+	AppliedSlot uint64 `json:"appliedSlot"`
+	Errors      []any  `json:"errors"`
 }
 
 // portfolioLendingPosition represents a single obligation within a wallet's
@@ -173,16 +184,27 @@ func (p *Provider) GetPositionSnapshot(ctx context.Context, address string) (*do
 		snapshot.ContributionUnavailableReason = "slot Solana indisponível"
 		return snapshot, nil
 	}
-	_, positionData, err := p.getRefreshedLendingPosition(ctx, address, slot)
+	portfolio, positionData, err := p.getRefreshedLendingPosition(ctx, address, slot)
 	if err != nil {
 		snapshot.ContributionUnavailableReason = "dados da API Kamino indisponíveis ou incompletos"
 		return snapshot, nil
 	}
-	if positionData.AppliedSlot == "" {
+	if len(portfolio.Sections.Lending.Errors) > 0 {
+		snapshot.ContributionUnavailableReason = "portfólio Kamino reportou erros de atualização"
+		return snapshot, nil
+	}
+	appliedSlotValue := positionData.AppliedSlot
+	if appliedSlotValue == "" && portfolio.Sections.Lending.AppliedSlot > 0 {
+		appliedSlotValue = strconv.FormatUint(portfolio.Sections.Lending.AppliedSlot, 10)
+	}
+	if appliedSlotValue == "" && portfolio.AppliedSlot != "" {
+		appliedSlotValue = portfolio.AppliedSlot
+	}
+	if appliedSlotValue == "" {
 		snapshot.ContributionUnavailableReason = "appliedSlot Kamino indisponível"
 		return snapshot, nil
 	}
-	appliedSlot, err := strconv.ParseUint(positionData.AppliedSlot, 10, 64)
+	appliedSlot, err := strconv.ParseUint(appliedSlotValue, 10, 64)
 	if err != nil || appliedSlot < slot {
 		snapshot.ContributionUnavailableReason = "portfólio Kamino não alcançou o slot solicitado"
 		return snapshot, nil
@@ -308,21 +330,32 @@ func (p *Provider) getSOLOracleAtMarket(ctx context.Context, market string) (*fl
 	}
 
 	const solMint = "So11111111111111111111111111111111111111112"
-	var parsed struct {
-		Markets []struct {
-			LendingMarket string `json:"lendingMarket"`
-			Prices        []struct {
-				Mint          string `json:"mint"`
-				Price         string `json:"price"`
-				Timestamp     string `json:"timestamp"`
-				MaxAgeSeconds int64  `json:"maxAgeInSeconds"`
-			} `json:"prices"`
-		} `json:"markets"`
+	type oracleMarket struct {
+		LendingMarket string `json:"lendingMarket"`
+		Prices        []struct {
+			Mint          string          `json:"mint"`
+			Price         string          `json:"price"`
+			Timestamp     string          `json:"timestamp"`
+			MaxAgeSeconds json.RawMessage `json:"maxAgeInSeconds"`
+		} `json:"prices"`
 	}
-	if err := json.Unmarshal(raw, &parsed); err != nil {
-		return nil, fmt.Errorf("decode SOL oracle: %w", err)
+
+	var markets []oracleMarket
+	trimmed := strings.TrimSpace(string(raw))
+	if strings.HasPrefix(trimmed, "[") {
+		if err := json.Unmarshal(raw, &markets); err != nil {
+			return nil, fmt.Errorf("decode SOL oracle array: %w", err)
+		}
+	} else {
+		var wrapped struct {
+			Markets []oracleMarket `json:"markets"`
+		}
+		if err := json.Unmarshal(raw, &wrapped); err != nil {
+			return nil, fmt.Errorf("decode SOL oracle: %w", err)
+		}
+		markets = wrapped.Markets
 	}
-	for _, marketData := range parsed.Markets {
+	for _, marketData := range markets {
 		if marketData.LendingMarket != market {
 			continue
 		}
@@ -334,12 +367,21 @@ func (p *Provider) getSOLOracleAtMarket(ctx context.Context, market string) (*fl
 			if err != nil || price <= 0 {
 				return nil, errors.New("invalid SOL oracle price")
 			}
-			quoteTime, err := time.Parse(time.RFC3339, quote.Timestamp)
-			if err != nil || quote.MaxAgeSeconds <= 0 {
+			maxAgeText := strings.Trim(strings.TrimSpace(string(quote.MaxAgeSeconds)), `"`)
+			maxAgeSeconds, err := strconv.ParseInt(maxAgeText, 10, 64)
+			if err != nil || maxAgeSeconds <= 0 {
 				return nil, errors.New("invalid SOL oracle freshness")
 			}
+			quoteTime, err := time.Parse(time.RFC3339, quote.Timestamp)
+			if err != nil {
+				unixTimestamp, parseErr := strconv.ParseInt(quote.Timestamp, 10, 64)
+				if parseErr != nil {
+					return nil, errors.New("invalid SOL oracle timestamp")
+				}
+				quoteTime = time.Unix(unixTimestamp, 0)
+			}
 			age := time.Since(quoteTime)
-			if age < -5*time.Minute || age > time.Duration(quote.MaxAgeSeconds)*time.Second {
+			if age < -5*time.Minute || age > time.Duration(maxAgeSeconds)*time.Second {
 				return nil, errors.New("stale SOL oracle price")
 			}
 			return &price, nil
@@ -356,17 +398,13 @@ func buildSOLContributionBasis(
 	if position == nil || hf == nil || solPrice == nil {
 		return nil, errors.New("dados de contribuição SOL incompletos")
 	}
-	if strings.TrimSpace(position.ActiveElevationGroup) == "" {
-		return nil, errors.New("grupo de elevação ativo Kamino não confirmado")
-	}
 
 	const solMint = "So11111111111111111111111111111111111111112"
 	var solDeposit *portfolioDeposit
 	for i := range position.Deposits {
 		deposit := &position.Deposits[i]
 		if deposit.Mint == solMint &&
-			strings.EqualFold(deposit.Symbol, "SOL") &&
-			deposit.ActiveElevationGroup == position.ActiveElevationGroup {
+			strings.EqualFold(deposit.Symbol, "SOL") {
 			solDeposit = deposit
 			break
 		}
@@ -377,6 +415,13 @@ func buildSOLContributionBasis(
 	liquidationLtv, err := parseDecimal(solDeposit.LiquidationLtv)
 	if err != nil || liquidationLtv <= 0 {
 		return nil, errors.New("liquidação SOL Kamino não confirmada")
+	}
+	if strings.TrimSpace(position.LiquidationLtv) != "" {
+		obligationLiquidationLtv, err := parseDecimal(position.LiquidationLtv)
+		if err == nil && obligationLiquidationLtv > 0 &&
+			obligationLiquidationLtv < liquidationLtv {
+			liquidationLtv = obligationLiquidationLtv
+		}
 	}
 
 	effectiveDebt := 0.0

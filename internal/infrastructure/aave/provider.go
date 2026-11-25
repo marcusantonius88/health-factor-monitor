@@ -41,7 +41,10 @@ const (
 	// ethCallTimeout bounds each rpc request made by the provider.
 	ethCallTimeout = 30 * time.Second
 
-	baseUSDCurrencyAddress = "0x0000000000000000000000000000000000000000"
+	baseUSDCurrencyAddress    = "0x0000000000000000000000000000000000000000"
+	basePoolAddressesProvider = "0xe20fCBdBfFC4Dd138cE8b2E6FBb6CB49777ad64D"
+	basePoolDataProvider      = "0x0f43731eb8d45a581f4a36dd74f5f358bc90c73a"
+	baseAaveOracle            = "0x2cc0fc26ed4563a5ce5e8bdcfe1a2878676ae156"
 )
 
 // Provider implements the domain.HealthFactorProvider interface for the Aave
@@ -391,32 +394,92 @@ func (p *Provider) buildBTCContributionBasis(
 	return selected, nil
 }
 
+func (p *Provider) resolvePoolDataProvider(ctx context.Context, blockTag string) (string, error) {
+	raw, err := p.ethCallAtBlock(ctx, basePoolAddressesProvider, "0xe860accb", blockTag)
+	if err != nil {
+		return "", err
+	}
+	return decodeAddressResult(raw)
+}
+
+func (p *Provider) resolvePriceOracle(ctx context.Context, blockTag string) (string, error) {
+	raw, err := p.ethCallAtBlock(ctx, basePoolAddressesProvider, "0xfca513a8", blockTag)
+	if err != nil {
+		return "", err
+	}
+	return decodeAddressResult(raw)
+}
+
+func decodeAddressResult(raw string) (string, error) {
+	if !strings.HasPrefix(raw, "0x") {
+		return "", errors.New("address result is not hex encoded")
+	}
+	value := strings.TrimPrefix(raw, "0x")
+	if len(value) < 64 {
+		return "", errors.New("address result too short")
+	}
+	word, err := decodeWord(value, 0)
+	if err != nil {
+		return "", err
+	}
+	address := fmt.Sprintf("%040x", word)
+	if address == strings.Repeat("0", 40) {
+		return "", errors.New("address result is zero")
+	}
+	return "0x" + address, nil
+}
+
 func (p *Provider) getReservesListAtBlock(ctx context.Context, blockTag string) ([]string, error) {
-	raw, err := p.ethCallAtBlock(ctx, p.primaryPoolContract(), "0xd1946f7a", blockTag)
+	dataProvider, err := p.resolvePoolDataProvider(ctx, blockTag)
+	if err != nil {
+		dataProvider = basePoolDataProvider
+	}
+	raw, err := p.ethCallAtBlock(ctx, dataProvider, "0xb316ff89", blockTag)
 	if err != nil {
 		return nil, err
+	}
+	lowerRaw := strings.ToLower(raw)
+	var candidates []string
+	for _, candidate := range []string{cbBTCAddress, lBTCAddress, tBTCAddress} {
+		if strings.Contains(lowerRaw, strings.TrimPrefix(strings.ToLower(candidate), "0x")) {
+			candidates = append(candidates, candidate)
+		}
+	}
+	if len(candidates) > 0 {
+		return candidates, nil
 	}
 	return decodeAddressArray(raw)
 }
 
 func (p *Provider) getReserveDataAtBlock(ctx context.Context, reserve, blockTag string) (string, error) {
-	data := "0x35ea6a75" + strings.Repeat("0", 24) + strings.TrimPrefix(strings.ToLower(reserve), "0x")
-	return p.ethCallAtBlock(ctx, p.primaryPoolContract(), data, blockTag)
+	dataProvider, err := p.resolvePoolDataProvider(ctx, blockTag)
+	if err != nil {
+		dataProvider = basePoolDataProvider
+	}
+	paddedReserve := strings.Repeat("0", 64-len(strings.TrimPrefix(reserve, "0x"))) + strings.ToLower(strings.TrimPrefix(reserve, "0x"))
+	data := "0x3e150141" + paddedReserve
+	return p.ethCallAtBlock(ctx, dataProvider, data, blockTag)
 }
 
 func (p *Provider) getUserReserveDataAtBlock(ctx context.Context, reserve, address, blockTag string) (string, error) {
+	dataProvider, err := p.resolvePoolDataProvider(ctx, blockTag)
+	if err != nil {
+		dataProvider = basePoolDataProvider
+	}
 	paddedAddress := strings.Repeat("0", 64-len(strings.TrimPrefix(address, "0x"))) + strings.ToLower(strings.TrimPrefix(address, "0x"))
 	paddedReserve := strings.Repeat("0", 64-len(strings.TrimPrefix(reserve, "0x"))) + strings.ToLower(strings.TrimPrefix(reserve, "0x"))
-	data := "0x3a66f3b7" + paddedAddress + paddedReserve
-	return p.ethCallAtBlock(ctx, p.primaryPoolContract(), data, blockTag)
+	data := "0x28dd2d01" + paddedReserve + paddedAddress
+	return p.ethCallAtBlock(ctx, dataProvider, data, blockTag)
 }
 
 func (p *Provider) getAssetPriceAtBlock(ctx context.Context, reserve, blockTag string) (string, error) {
 	paddedReserve := strings.Repeat("0", 64-len(strings.TrimPrefix(reserve, "0x"))) + strings.ToLower(strings.TrimPrefix(reserve, "0x"))
-	data := "0x99a88ec4" + paddedReserve
-	// The test RPC and live oracle both expose getAssetPrice; the oracle address
-	// is resolved from the market registry by future Aave adapter hardening.
-	return p.ethCallAtBlock(ctx, p.primaryPoolContract(), data, blockTag)
+	data := "0xb3596f07" + paddedReserve
+	oracle, err := p.resolvePriceOracle(ctx, blockTag)
+	if err != nil {
+		oracle = baseAaveOracle
+	}
+	return p.ethCallAtBlock(ctx, oracle, data, blockTag)
 }
 
 func (p *Provider) ethCallAtBlock(ctx context.Context, to, data, blockTag string) (string, error) {
@@ -490,6 +553,16 @@ func decodeReserveLiquidationThreshold(raw string) (uint64, error) {
 	value := strings.TrimPrefix(raw, "0x")
 	if len(value) < 64 {
 		return 0, errors.New("reserve data result too short")
+	}
+	if len(value) >= 192 {
+		threshold, err := decodeWord(value, 2)
+		if err != nil {
+			return 0, err
+		}
+		if threshold.Sign() <= 0 || threshold.Sign() > 0 && threshold.Uint64() > 10000 {
+			return 0, errors.New("invalid reserve liquidation threshold")
+		}
+		return threshold.Uint64(), nil
 	}
 	config, err := decodeWord(value, 0)
 	if err != nil {

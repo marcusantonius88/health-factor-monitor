@@ -28,7 +28,7 @@ func TestFormatResults(t *testing.T) {
 
 	got := FormatResults(results)
 	// Novo formato: Health Factor header + alinhamento com tabulação
-	want := "Health Factor\n-------------\nEthereum:\t🟩 no active debt\nSolana:\t🟩 2.18\n"
+	want := "Health Factor\n-------------\nHF mínimo desejável: 2,00\nEthereum:\t🟩 no active debt\nSolana:\t🟩 2.18\n"
 	if got != want {
 		t.Fatalf("FormatResults() = %q, want %q", got, want)
 	}
@@ -71,7 +71,7 @@ func TestFormatResultsContributionEstimateLines(t *testing.T) {
 	}
 
 	got := FormatResults(results)
-	want := "Health Factor\n-------------\n" +
+	want := "Health Factor\n-------------\nHF mínimo desejável: 2,00\n" +
 		"Base:\t🟨 1.32\n" +
 		"\tAporte necessário (BTC): US$ 850,00\n" +
 		"Solana:\t🟥 1.08\n" +
@@ -89,7 +89,7 @@ func TestFormatResultsOmitsContributionLinesForSafeAndOutOfScope(t *testing.T) {
 				Network:  domain.NetworkBase,
 			},
 			HealthFactor: &domain.HealthFactor{
-				Value:          1.5,
+				Value:          2.0,
 				Classification: domain.ClassificationSafe,
 			},
 		},
@@ -112,9 +112,38 @@ func TestFormatResultsOmitsContributionLinesForSafeAndOutOfScope(t *testing.T) {
 	}
 
 	got := FormatResults(results)
-	want := "Health Factor\n-------------\n" +
-		"Base:\t🟩 1.50\n" +
+	want := "Health Factor\n-------------\nHF mínimo desejável: 2,00\n" +
+		"Base:\t🟩 2.00\n" +
 		"Ethereum:\t🟨 1.32\n"
+	if got != want {
+		t.Fatalf("FormatResults() = %q, want %q", got, want)
+	}
+}
+
+func TestFormatResultsGreenHealthFactorBelowDesiredTarget(t *testing.T) {
+	results := []domain.ProviderResult{
+		{
+			Position: domain.LendingPosition{
+				Protocol: domain.ProtocolAave,
+				Network:  domain.NetworkBase,
+			},
+			HealthFactor: &domain.HealthFactor{
+				Value:          1.5,
+				Classification: domain.ClassificationSafe,
+			},
+			ContributionEstimate: &domain.ContributionEstimate{
+				Status:             domain.ContributionStatusAvailable,
+				AssetSymbol:        "BTC",
+				AmountUSD:          850,
+				TargetHealthFactor: domain.TargetHealthFactor,
+			},
+		},
+	}
+
+	got := FormatResults(results)
+	want := "Health Factor\n-------------\nHF mínimo desejável: 2,00\n" +
+		"Base:\t🟩 1.50\n" +
+		"\tAporte necessário (BTC): US$ 850,00\n"
 	if got != want {
 		t.Fatalf("FormatResults() = %q, want %q", got, want)
 	}
@@ -157,7 +186,7 @@ func TestFormatResultsUnavailableContributionEstimates(t *testing.T) {
 	}
 
 	got := FormatResults(results)
-	want := "Health Factor\n-------------\n" +
+	want := "Health Factor\n-------------\nHF mínimo desejável: 2,00\n" +
 		"Base:\t🟨 1.32\n" +
 		"\tAporte necessário (BTC): indisponível (dados de preço indisponíveis)\n" +
 		"Solana:\t🟥 1.08\n" +

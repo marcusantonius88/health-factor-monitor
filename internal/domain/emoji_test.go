@@ -10,13 +10,14 @@ func TestEmojiForHealthFactor(t *testing.T) {
 		expected string
 	}{
 		{1.50, "🟩"},
+		{1.499, "🟩"},
 		{1.49, "🟨"},
 		{1.10, "🟨"},
 		{1.09, "🟥"},
 		{2.00, "🟩"},
 		{0.95, "🟥"},
 	}
-	
+
 	for _, test := range tests {
 		result := EmojiForHealthFactor(test.value)
 		if result != test.expected {

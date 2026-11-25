@@ -32,7 +32,7 @@ No setup changes are required: the Go module, standard test tooling, provider pa
 
 **Goal**: Show a conservative USD estimate for BTC collateral on Aave/Base and SOL collateral on Kamino/Solana when valid, current, position-specific inputs are available. Classify HF exactly 1.50 as Seguro and do not make estimate-only reads for safe positions.
 
-**Independent Test**: With deterministic provider fixtures for both target networks and a Health Factor below 1.50, verify that the displayed USD amount, after asset-unit rounding, yields a projected HF >= 1.50. Verify HF = 1.50 is Seguro and has no estimate line.
+**Independent Test**: With deterministic provider fixtures for both target networks and a Health Factor below 2.00, verify that the displayed USD amount, after asset-unit rounding, yields a projected HF >= 2.00. Verify HF = 1.50 remains Seguro but still receives an estimate until it reaches 2.00.
 
 ### Tests for User Story 1
 
@@ -46,13 +46,13 @@ No setup changes are required: the Go module, standard test tooling, provider pa
 ### Implementation for User Story 1
 
 - [x] T010 [US1] Change `domain.Classify` in `internal/domain/healthfactor.go` so HF exactly 1.50 is `ClassificationSafe`; retain custom-threshold behavior and pass T004.
-- [x] T011 [US1] Implement the shared contribution calculation in `internal/domain/contribution.go` using the normalized effective debt and incremental liquidation factor; round upward at asset precision and USD cents, and reject results whose projected HF remains below 1.50.
+- [x] T011 [US1] Implement the shared contribution calculation in `internal/domain/contribution.go` using the normalized effective debt and incremental liquidation factor; round upward to reach the desired target HF 2.00 at asset precision and USD cents.
 - [x] T012 [US1] Extend the Aave adapter in `internal/infrastructure/aave/provider.go` to resolve the Base Pool/oracle/data provider and read account, reserve, user collateral, and eMode data at one pinned block; preserve a valid Health Factor if estimate-only reads fail.
 - [x] T013 [US1] Implement Aave BTC reserve selection and normalized contribution inputs in `internal/infrastructure/aave/provider.go`; validate live reserve eligibility, supply state/caps, effective liquidation threshold, USD base unit, price/source freshness, and use the largest valid rounded estimate if multiple eligible BTC representations exist.
 - [x] T014 [US1] Pass the configured Solana RPC endpoint into the Kamino provider from `cmd/hfmon/main.go` and update `kamino.NewProvider` in `internal/infrastructure/kamino/provider.go` to retain both RPC and API configuration.
 - [x] T015 [US1] Implement Kamino portfolio refresh in `internal/infrastructure/kamino/provider.go`: read the current Solana slot, request `sections=lending` with `minSlot`, verify `appliedSlot`, and retrieve `/oracles/prices?markets=all` with timestamp/max-age validation for the exact market and SOL mint.
 - [x] T016 [US1] Normalize Kamino obligation debt and SOL liquidation inputs in `internal/infrastructure/kamino/provider.go`, including borrow factors and verified active elevation-group terms; never substitute the hypothetical pair endpoint's auto-selected group for the obligation's active group.
-- [x] T017 [US1] Orchestrate the optional contribution snapshot in `internal/application/service.go`; use the same position/obligation as the Health Factor, calculate only below 1.50, use any refreshed snapshot Health Factor for display, and preserve independent processing of positions.
+- [x] T017 [US1] Orchestrate the optional contribution snapshot in `internal/application/service.go`; use the same position/obligation as the Health Factor, calculate below the desired target 2.00 while preserving the 1.50 classification, use any refreshed snapshot Health Factor for display, and preserve independent processing.
 - [x] T018 [US1] Render available contribution estimates in `internal/interfaces/cli/app.go` as `Aporte necessário (BTC|SOL): US$ ...` directly below the matching network row, without token quantity or unit price.
 
 **Checkpoint**: US1 is independently demonstrable using fixtures for valid Aave/Base and Kamino/Solana inputs, with an inclusive safe threshold and no extra estimate reads for safe positions.
@@ -87,7 +87,7 @@ No setup changes are required: the Go module, standard test tooling, provider pa
 
 **Purpose**: Document the user-visible behavior and validate the completed feature.
 
-- [x] T027 [P] Update `README.md` with the below-1.50 USD estimate behavior, supported Aave/Base BTC and Kamino/Solana SOL assets, unavailable state, and the fact that no transactions are executed.
+- [x] T027 [P] Update `README.md` with the below-2.00 desired-target behavior, supported Aave/Base BTC and Kamino/Solana SOL assets, unavailable state, and the fact that no transactions are executed.
 - [x] T028 Run `go test ./...` and `go vet ./...`; execute the scenarios in `specs/002-contribution-estimate/quickstart.md` with deterministic fixtures and confirm no live transaction or fixed-price assumption is used.
 
 ---

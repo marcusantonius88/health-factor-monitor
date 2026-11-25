@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/marcus/health-factor-monitor/internal/application"
 	"github.com/marcus/health-factor-monitor/internal/domain"
@@ -23,11 +24,16 @@ func main() {
 }
 
 func run(ctx context.Context) error {
-	configPath := flag.String("config", "config.json", "path to the JSON configuration file")
+	configPath := flag.String("config", "", "path to the JSON configuration file")
 	protocol := flag.String("protocol", "", "only check positions for this protocol (e.g. aave, kamino)")
 	flag.Parse()
 
-	loader := config.NewReader(*configPath)
+	resolvedConfigPath, err := resolveConfigPath(*configPath)
+	if err != nil {
+		return err
+	}
+
+	loader := config.NewReader(resolvedConfigPath)
 	cfg, err := loader.Load()
 	if err != nil {
 		return err
@@ -50,6 +56,34 @@ func run(ctx context.Context) error {
 		return nil
 	}
 	return fmt.Errorf("no health factors could be retrieved for any position")
+}
+
+// resolveConfigPath resolves the configuration location for global CLI use.
+// Explicit -config and HFMON_CONFIG override automatic discovery. Otherwise,
+// the OS user configuration directory is preferred, followed by ./config.json.
+func resolveConfigPath(explicitPath string) (string, error) {
+	userConfigDir, err := os.UserConfigDir()
+	if err != nil {
+		return "", fmt.Errorf("resolve user config directory: %w", err)
+	}
+	return resolveConfigPathFrom(explicitPath, os.Getenv("HFMON_CONFIG"), userConfigDir, "config.json"), nil
+}
+
+func resolveConfigPathFrom(explicitPath, envPath, userConfigDir, localPath string) string {
+	if explicitPath != "" {
+		return explicitPath
+	}
+	if envPath != "" {
+		return envPath
+	}
+	globalPath := filepath.Join(userConfigDir, "hf", "config.json")
+	if _, err := os.Stat(globalPath); err == nil {
+		return globalPath
+	}
+	if _, err := os.Stat(localPath); err == nil {
+		return localPath
+	}
+	return globalPath
 }
 
 // buildProviders wires the provider adapters for the MVP: Aave against the

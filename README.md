@@ -41,18 +41,24 @@ The MVP focuses on productivity and reliability.
 - Terminal output with emoji indicators and Health Factor values;
 - Exit status `0` when at least one position succeeds, or `1` when no position succeeds.
 
-### Estimated Contribution for Safe Health Factor
+### Estimated Contribution for Desired Health Factor
+
+The classification remains: `HF >= 1.50` is Safe. Separately, the desired
+Health Factor for contribution estimates is `2.00`.
 
 When a supported Aave/Base or Kamino/Solana position has a Health Factor below
-`1.50`, the CLI estimates the additional collateral needed to reach at least
-`1.50`.
+`2.00`, the CLI estimates the additional collateral needed to reach at least
+`2.00`, even when the position is currently classified as Safe.
 
 - Aave on Base reports the estimate for an eligible BTC-denominated collateral
   asset accepted by the position.
 - Kamino on Solana reports the estimate for SOL.
+- If Kamino does not expose the active elevation group, the SOL estimate uses a
+  conservative public fallback based on the SOL reserve LTV and obligation
+  aggregate liquidation LTV, plus public borrow factors.
 - Values are displayed only in USD, directly below the corresponding network
   summary.
-- A safe position (`HF >= 1.50`) does not show an estimate or unavailable
+- A position with `HF >= 2.00` does not show an estimate or unavailable
   contribution line.
 - If current prices or protocol risk parameters cannot be verified, the CLI
   reports the contribution as unavailable and does not print a numeric amount.
@@ -200,6 +206,31 @@ Solana:	🟩 2.22
 ```
 
 The output uses the network name rather than the configured alias or protocol. A position without an active debt is rendered as `no active debt` only when the provider returns an effectively infinite Aave health factor; provider failures or missing active borrow records are shown as `HF: unavailable`.
+
+### Running `hf` from Any Directory
+
+After installing with `make install`, the CLI can discover the configuration
+automatically. Configure the global file in the OS user configuration directory:
+
+```bash
+mkdir -p "$HOME/.config/hf"
+cp /home/marcus/projects/health-factor-monitor/config.json "$HOME/.config/hf/config.json"
+hf
+```
+
+You can also set an environment override:
+
+```bash
+export HFMON_CONFIG="$HOME/.config/hf/config.json"
+hf
+```
+
+Resolution order:
+
+1. `-config` explicit flag
+2. `HFMON_CONFIG`
+3. User configuration directory: `hf/config.json`
+4. Local `config.json`
 
 ### 5. Filter by Protocol
 

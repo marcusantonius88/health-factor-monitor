@@ -22,9 +22,9 @@ The test fixtures should include:
 
 ## Required Scenarios
 
-1. **Aave/Base below target**: With a uniquely eligible BTC reserve and valid snapshot, verify the displayed USD amount corresponds to rounded-up eligible BTC collateral and projected HF >= 1.50.
-2. **Kamino/Solana below target**: With a matching obligation/market, current SOL price, and verified active elevation-group terms for the SOL reserve, verify the USD amount accounts for applicable liquidation/elevation terms and projected HF >= 1.50.
-3. **Boundary and safe position**: Verify HF exactly 1.50 is classified as safe, and HF exactly 1.50 or above produces no contribution line and does not request estimate-only data.
+1. **Aave/Base below desired target**: With a uniquely eligible BTC reserve and valid snapshot, verify the displayed USD amount corresponds to rounded-up eligible BTC collateral and projected HF >= 2.00.
+2. **Kamino/Solana below desired target**: With a matching obligation/market, current SOL price, and verified active elevation-group terms for the SOL reserve, verify the USD amount accounts for applicable liquidation/elevation terms and projected HF >= 2.00.
+3. **Boundary and safe position**: Verify HF exactly 1.50 is classified as safe. A position below 2.00 still receives an estimate line, while HF >= 2.00 produces no estimate and does not request estimate-only data.
 4. **Unavailable inputs**: Missing/stale oracle, portfolio that has not reached `minSlot`, protocol/API error, ineligible/ambiguous asset, unknown active elevation group, or invalid risk data produces an explicit unavailable line with no numeric amount.
 5. **Independent processing**: An estimate-only failure on one position does not suppress another position's valid Health Factor or estimate.
 6. **Compatibility**: Existing Aave/Ethereum results and existing safe-position output retain their current format and behavior.

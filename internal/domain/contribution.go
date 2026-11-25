@@ -10,7 +10,7 @@ import (
 const (
 	ContributionStatusAvailable   = "available"
 	ContributionStatusUnavailable = "unavailable"
-	TargetHealthFactor            = 1.5
+	TargetHealthFactor            = 2.0
 )
 
 // ContributionAsset identifies the protocol asset used as additional
@@ -88,7 +88,7 @@ func (b ContributionBasis) Validate() error {
 }
 
 // CalculateContributionEstimate calculates the minimum contribution that
-// reaches the fixed 1.50 Health Factor target. It rounds upward to the asset's
+// reaches the fixed 2.00 Health Factor target. It rounds upward to the asset's
 // smallest supported unit and then to display cents, and rejects a result that
 // does not meet the target after rounding.
 func CalculateContributionEstimate(b ContributionBasis) (*ContributionEstimate, error) {
@@ -204,7 +204,7 @@ func (e ContributionEstimate) Validate() error {
 	var errs []string
 
 	if e.TargetHealthFactor != TargetHealthFactor {
-		errs = append(errs, "target health factor must be 1.50")
+		errs = append(errs, "target health factor must be 2.00")
 	}
 	if e.AssetSymbol != "BTC" && e.AssetSymbol != "SOL" {
 		errs = append(errs, "asset symbol must be BTC or SOL")

@@ -55,7 +55,7 @@ Convert from market base units to USD only after confirming the oracle base curr
 
 Use Kamino's official `GET /portfolio/{pubkey}` response to identify the active lending obligation, and `GET /oracles/prices?markets=all` for the exact market and SOL mint's protocol oracle quote. The `all` response groups prices by `lendingMarket`, so match both market and mint. Advance the portfolio's lending `minSlot` to the current slot read from the configured Solana RPC and require `appliedSlot` to meet it. Validate the oracle item's timestamp against its `maxAgeInSeconds` independently.
 
-Use SOL collateral/borrow terms only when the exact reserve eligibility and active elevation-group parameters applicable to that obligation are known. The documented portfolio schema does not expose the active elevation-group ID, and the pair endpoint's auto-selected group does not prove which group the existing obligation currently uses. If that state cannot be established from a documented official data source, mark the estimate unavailable instead of assuming a group or risk parameter. Do not add a TypeScript SDK runtime dependency or port account decoding into Go merely to force a numeric result.
+Use SOL collateral/borrow terms only when the reserve and the obligation's public market/debt inputs are confirmed. The documented portfolio schema does not expose the active elevation-group ID, so the implementation uses a conservative public fallback: the SOL deposit's liquidation LTV, reduced to the obligation aggregate liquidation LTV when that aggregate is lower, plus borrow-factor-adjusted public debt. It does not claim that an elevation group was confirmed. If SOL reserve/debt/price data is incomplete, mark the estimate unavailable. Do not add a TypeScript SDK runtime dependency or port account decoding merely to force a numeric result.
 
 ### Rationale
 
@@ -103,7 +103,7 @@ Normalize protocol snapshots into:
 - positive USD asset price and token precision;
 - source freshness/eligibility validation status.
 
-For target `T = 1.50`, estimate the minimum USD amount from the health-factor deficit and effective debt, divided by the protocol-normalized incremental liquidation factor. Convert the result to the smallest representable asset amount by rounding upward using the current asset price and precision; convert it back to USD and round the displayed cents upward. Re-evaluate the projected Health Factor after rounding and refuse the estimate if it remains below 1.50.
+For desired target `T = 2.00`, estimate the minimum USD amount from the health-factor deficit and effective debt, divided by the protocol-normalized incremental liquidation factor. Convert the result to the smallest representable asset amount by rounding upward using the current asset price and precision; convert it back to USD and round the displayed cents upward. Re-evaluate the projected Health Factor after rounding and refuse the estimate if it remains below 2.00. The classification Safe boundary remains independently fixed at 1.50.
 
 ### Rationale
 

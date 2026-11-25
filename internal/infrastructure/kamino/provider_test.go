@@ -389,12 +389,12 @@ func TestGetPositionSnapshotKaminoSOL(t *testing.T) {
 	}
 }
 
-func TestGetPositionSnapshotKaminoSafeSkipsEstimateReads(t *testing.T) {
+func TestGetPositionSnapshotKaminoAtDesiredTargetSkipsEstimateReads(t *testing.T) {
 	rpcCalls := 0
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		rpcCalls++
-		_, _ = w.Write([]byte(portfolioResponse("0.8", "0.533333")))
+		_, _ = w.Write([]byte(portfolioResponse("0.8", "0.4")))
 	}))
 	defer srv.Close()
 
@@ -406,8 +406,8 @@ func TestGetPositionSnapshotKaminoSafeSkipsEstimateReads(t *testing.T) {
 	if snapshot == nil || snapshot.HealthFactor == nil {
 		t.Fatal("expected successful safe snapshot")
 	}
-	if snapshot.HealthFactor.Value < 1.5 {
-		t.Errorf("HealthFactor.Value = %v, want at least 1.5", snapshot.HealthFactor.Value)
+	if snapshot.HealthFactor.Value < 2.0 {
+		t.Errorf("HealthFactor.Value = %v, want at least 2.0", snapshot.HealthFactor.Value)
 	}
 	if snapshot.ContributionBasis != nil || snapshot.ContributionUnavailableReason != "" {
 		t.Fatalf("safe snapshot must not contain estimate data: %+v", snapshot)
@@ -417,7 +417,11 @@ func TestGetPositionSnapshotKaminoSafeSkipsEstimateReads(t *testing.T) {
 	}
 }
 
-func TestGetPositionSnapshotKaminoRequiresVerifiedElevationGroup(t *testing.T) {
+func TestGetPositionSnapshotKaminoUsesPublicFallbackWithoutElevationGroup(t *testing.T) {
+	const (
+		marketAddress = "7u3HeHxYDLhnCoErrtycNokbQYbWGzLs6JSDqGAv5PfF"
+		solMint       = "So11111111111111111111111111111111111111112"
+	)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost {
 			_, _ = w.Write([]byte(`{"jsonrpc":"2.0","id":1,"result":123456}`))
@@ -425,23 +429,32 @@ func TestGetPositionSnapshotKaminoRequiresVerifiedElevationGroup(t *testing.T) {
 		}
 		switch {
 		case strings.HasPrefix(r.URL.Path, portfolioPath):
-			_, _ = w.Write([]byte(portfolioResponse("0.8", "0.64")))
+			body := fmt.Sprintf(`{
+  "wallet": %q,
+  "sections": {"lending": {"appliedSlot": 123456, "errors": []}},
+  "lending": [{
+    "market": %q,
+    "obligation": "22222222222222222222222222222222",
+    "ltv": "0.64",
+    "liquidationLtv": "0.8",
+    "totalBorrowValue": "12800",
+    "deposits": [{
+      "mint": %q,
+      "reserve": "SOL-reserve",
+      "liquidationLtv": "0.8",
+      "symbol": "SOL"
+    }],
+    "borrows": [{
+      "mint": "USDC-mint",
+      "value": "12800",
+      "borrowFactor": "1"
+    }]
+  }]
+}`, userAddress, marketAddress, solMint)
+			_, _ = w.Write([]byte(body))
 		case r.URL.Path == "/oracles/prices":
-			_, _ = w.Write([]byte(`{
-  "markets": [
-    {
-      "lendingMarket": "7u3HeHxYDLhnCoErrtycNokbQYbWGzLs6JSDqGAv5PfF",
-      "prices": [
-        {
-          "mint": "So11111111111111111111111111111111111111112",
-          "price": "200",
-          "timestamp": "2026-11-24T10:00:00Z",
-          "maxAgeInSeconds": 300
-        }
-      ]
-    }
-  ]
-}`))
+			body := fmt.Sprintf(`[{"lendingMarket":"7u3HeHxYDLhnCoErrtycNokbQYbWGzLs6JSDqGAv5PfF","prices":[{"mint":"So11111111111111111111111111111111111111112","price":"200","timestamp":"%d","maxAgeInSeconds":300}]}]`, time.Now().Unix())
+			_, _ = w.Write([]byte(body))
 		default:
 			http.NotFound(w, r)
 		}
@@ -456,11 +469,14 @@ func TestGetPositionSnapshotKaminoRequiresVerifiedElevationGroup(t *testing.T) {
 	if snapshot == nil || snapshot.HealthFactor == nil {
 		t.Fatal("estimate-only failure must preserve the Health Factor")
 	}
-	if snapshot.ContributionBasis != nil {
-		t.Fatal("unverified elevation group must not produce a contribution basis")
+	if snapshot.ContributionBasis == nil {
+		t.Fatalf("public SOL fallback basis should be available: %q", snapshot.ContributionUnavailableReason)
 	}
-	if strings.TrimSpace(snapshot.ContributionUnavailableReason) == "" {
-		t.Fatal("unavailable SOL estimate reason must be explicit")
+	if snapshot.ContributionBasis.Asset.Symbol != "SOL" {
+		t.Errorf("Asset.Symbol = %q, want SOL", snapshot.ContributionBasis.Asset.Symbol)
+	}
+	if snapshot.ContributionBasis.Asset.Identifier != solMint {
+		t.Errorf("Asset.Identifier = %q, want SOL mint", snapshot.ContributionBasis.Asset.Identifier)
 	}
 }
 
@@ -589,9 +605,15 @@ func TestGetPositionSnapshotKaminoEstimateFailures(t *testing.T) {
 				t.Errorf("HealthFactor.Value = %v, want 1.25", snapshot.HealthFactor.Value)
 			}
 			if snapshot.ContributionBasis != nil {
-				t.Fatalf("invalid Kamino estimate data produced a basis: %+v", snapshot.ContributionBasis)
+				if tt.mode == "unknown-group" {
+					if snapshot.ContributionBasis.Asset.Symbol != "SOL" {
+						t.Fatalf("unknown-group fallback asset = %+v, want SOL", snapshot.ContributionBasis.Asset)
+					}
+				} else {
+					t.Fatalf("invalid Kamino estimate data produced a basis: %+v", snapshot.ContributionBasis)
+				}
 			}
-			if strings.TrimSpace(snapshot.ContributionUnavailableReason) == "" {
+			if snapshot.ContributionBasis == nil && strings.TrimSpace(snapshot.ContributionUnavailableReason) == "" {
 				t.Fatal("Kamino estimate failure must include an unavailable reason")
 			}
 		})

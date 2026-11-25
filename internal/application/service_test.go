@@ -292,13 +292,65 @@ func TestCheckPositionAttachesBelowTargetContributionEstimate(t *testing.T) {
 	}
 }
 
-func TestCheckPositionSafeSkipsSnapshotEstimateReads(t *testing.T) {
+func TestCheckPositionGreenAt150StillRequestsDesiredTargetEstimate(t *testing.T) {
+	position := domain.LendingPosition{
+		Wallet:   domain.Wallet{Address: "0x0000000000000000000000000000000000000001"},
+		Protocol: domain.ProtocolAave,
+		Network:  domain.NetworkBase,
+	}
+	hf := &domain.HealthFactor{Value: 1.5, Classification: domain.ClassificationSafe}
+	snapshot := &domain.PositionSnapshot{
+		Position:     position,
+		HealthFactor: hf,
+		ContributionBasis: &domain.ContributionBasis{
+			CurrentHealthFactor:          1.5,
+			EffectiveDebtUSD:             100000,
+			IncrementalLiquidationFactor: 0.82,
+			Asset:                        domain.ContributionAsset{Symbol: "BTC", Identifier: "0xbtc"},
+			PriceUSD:                     85000,
+			AssetPrecision:               8,
+			PriceFreshnessValidated:      true,
+		},
+	}
+	provider := &mockSnapshotProvider{
+		mockProvider: mockProvider{
+			protocol: domain.ProtocolAave,
+			network:  domain.NetworkBase,
+			hf:       hf,
+		},
+		snapshot: snapshot,
+	}
+
+	svc := application.NewCheckService(
+		newTestConfig(position),
+		map[string]domain.HealthFactorProvider{"aave:base": provider},
+	)
+	results := svc.CheckAll(context.Background())
+
+	if len(results) != 1 {
+		t.Fatalf("got %d results, want 1", len(results))
+	}
+	if provider.snapshotCalls != 1 {
+		t.Errorf("snapshot calls = %d, want 1 for green HF below desired target", provider.snapshotCalls)
+	}
+	if results[0].HealthFactor == nil || results[0].HealthFactor.Value != 1.5 {
+		t.Fatalf("HealthFactor = %+v, want 1.5", results[0].HealthFactor)
+	}
+	if results[0].ContributionEstimate == nil {
+		t.Fatal("expected estimate to desired HF 2.00 at classified-safe HF 1.50")
+	}
+	if results[0].ContributionEstimate.Status != domain.ContributionStatusAvailable {
+		t.Errorf("Status = %q, want available", results[0].ContributionEstimate.Status)
+	}
+}
+
+func TestCheckPositionAtDesiredTargetSkipsSnapshotEstimateReads(t *testing.T) {
 	position := domain.LendingPosition{
 		Wallet:   domain.Wallet{Address: "11111111111111111111111111111111"},
 		Protocol: domain.ProtocolKamino,
 		Network:  domain.NetworkSolana,
 	}
-	hf := &domain.HealthFactor{Value: 1.5, Classification: domain.ClassificationSafe}
+	hf := &domain.HealthFactor{Value: 2.0, Classification: domain.ClassificationSafe}
 	provider := &mockSnapshotProvider{
 		mockProvider: mockProvider{
 			protocol: domain.ProtocolKamino,
@@ -323,8 +375,8 @@ func TestCheckPositionSafeSkipsSnapshotEstimateReads(t *testing.T) {
 	if provider.snapshotCalls != 0 {
 		t.Errorf("snapshot calls = %d, want 0 for safe position", provider.snapshotCalls)
 	}
-	if results[0].HealthFactor == nil || results[0].HealthFactor.Value != 1.5 {
-		t.Fatalf("HealthFactor = %+v, want 1.5", results[0].HealthFactor)
+	if results[0].HealthFactor == nil || results[0].HealthFactor.Value != 2.0 {
+		t.Fatalf("HealthFactor = %+v, want 2.0", results[0].HealthFactor)
 	}
 	if results[0].ContributionEstimate != nil {
 		t.Fatalf("safe position must not have contribution estimate: %+v", results[0].ContributionEstimate)

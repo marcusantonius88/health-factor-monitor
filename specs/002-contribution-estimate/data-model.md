@@ -33,7 +33,7 @@ Protocol-neutral inputs for calculating the Health Factor effect of adding the s
 | Active risk group | protocol-specific metadata | when applicable | Verified Aave eMode or Kamino elevation-group state used for the asset's effective liquidation factor |
 
 **Validation Rules**:
-- `CurrentHealthFactor` must be below 1.50 before an estimate is attempted.
+- `CurrentHealthFactor` must be below 2.00 before an estimate is attempted.
 - `EffectiveDebtUSD`, `IncrementalLiquidationFactor`, and `PriceUSD` must be positive and finite.
 - The asset must be active and eligible to contribute collateral for the selected position.
 - Applicable user eMode/elevation-group risk parameters must be verified; a hypothetical pair's default/auto-selected group is not proof of the existing position's active group.
@@ -66,14 +66,14 @@ The informational contribution result displayed by the CLI.
 | AssetSymbol | string | yes | `BTC` or `SOL` |
 | AmountUSD | non-negative decimal | only when available | USD value, rounded upward to cents after asset-precision rounding |
 | Reason | string | only when unavailable | Clear short explanation without a numeric amount |
-| TargetHealthFactor | decimal | yes | Fixed target `1.50` |
+| TargetHealthFactor | decimal | yes | Fixed desired target `2.00`; classification remains `1.50` |
 
 **Validation Rules**:
 - Safe positions do not receive a contribution estimate object or CLI line.
-- Available amounts must be positive for a position below target and yield projected HF >= 1.50 after rounding.
+- Available amounts must be positive for a position below target and yield projected HF >= 2.00 after rounding.
 - Unavailable estimates contain no numeric amount.
 - Token quantity and unit price are not exposed in CLI output.
 
 ## Calculation Relationship
 
-The provider translates its native collateral/debt/risk model into a contribution basis. The shared estimator finds the minimum USD contribution that closes the liquidation-capacity deficit to target 1.50, rounds up at asset precision and USD display precision, and validates the projected result. Protocol values that cannot be mapped faithfully to this basis must fail closed.
+The provider translates its native collateral/debt/risk model into a contribution basis. The shared estimator finds the minimum USD contribution that closes the liquidation-capacity deficit to desired target 2.00, rounds up at asset precision and USD display precision, and validates the projected result. Protocol values that cannot be mapped faithfully to this basis must fail closed.

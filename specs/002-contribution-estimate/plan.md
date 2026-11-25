@@ -6,7 +6,7 @@
 
 ## Summary
 
-Estimate and display the USD value of BTC-denominated collateral for Aave on Base or SOL collateral for Kamino on Solana when a retrieved Health Factor is below 1.50. Keep protocol-specific data acquisition in each existing provider, normalize the risk inputs for one shared, deterministic estimator, and report an unavailable state rather than a numeric result when price, freshness, collateral eligibility, or risk data cannot be verified.
+Estimate and display the USD value of BTC-denominated collateral for Aave on Base or SOL collateral for Kamino on Solana when a retrieved Health Factor is below the desired target 2.00. Classification remains Safe at HF >= 1.50. Keep protocol-specific data acquisition in each existing provider, normalize the risk inputs for one shared, deterministic estimator, and report an unavailable state rather than a numeric result when price, freshness, collateral eligibility, or risk data cannot be verified.
 
 ## Technical Context
 
@@ -67,7 +67,7 @@ Estimate and display the USD value of BTC-denominated collateral for Aave on Bas
 
 Add a small optional position-snapshot capability for Aave/Base and Kamino/Solana rather than changing `HealthFactorProvider`. The capability first retrieves the Health Factor; if it is already >= 1.50, it returns without estimate-only reads. If below target, it obtains the additional data needed to build a snapshot tied to the same selected position and market. A provider may return a valid Health Factor while marking only the contribution basis unavailable; auxiliary estimate failures must not turn a successful Health Factor into a provider failure. If a refreshed snapshot changes the Health Factor, use the snapshot value for both display and calculation.
 
-The adapters map native protocol values into a common risk basis: current Health Factor, effective USD debt, the incremental liquidation-risk contribution of one USD of the chosen asset, USD price, token precision, and source freshness. A pure domain/application calculator computes the minimum amount, rounds upward to the smallest token unit and display cent, then validates the projected Health Factor is at least 1.50. The CLI never derives protocol formulas.
+The adapters map native protocol values into a common risk basis: current Health Factor, effective USD debt, the incremental liquidation-risk contribution of one USD of the chosen asset, USD price, token precision, and source freshness. A pure domain/application calculator computes the minimum amount, rounds upward to the smallest token unit and display cent, then validates the projected Health Factor is at least 2.00. The CLI never derives protocol formulas.
 
 This keeps the estimator shared without forcing Aave and Kamino to share their transport, account models, or collateral rules. If a protocol snapshot cannot be represented safely by the normalized basis, that provider returns an unavailable estimate.
 
@@ -87,7 +87,7 @@ This keeps the estimator shared without forcing Aave and Kamino to share their t
 - Before trusting portfolio position rows, read the current Solana slot from the configured RPC and pass it as `minSlot` with `sections=lending`; require the returned lending section's `appliedSlot` to meet that slot. Independently validate the SOL oracle quote's timestamp and `maxAgeInSeconds`, since the API documents that `minSlot` does not refresh prices.
 - Select the SOL reserve/mint only from the same lending market and verify the collateral/borrow pair terms applicable to that obligation. Do not select by symbol alone.
 - Use `/oracles/prices?markets=all`, match both the obligation's market and canonical SOL mint, and validate the quote timestamp against its published `maxAgeInSeconds`; cross-check the portfolio section's price freshness and errors.
-- Account for the obligation's effective debt (including borrow factors where applicable) and the SOL reserve's effective liquidation LTV under the obligation's active elevation-group terms. The public portfolio schema does not expose the active group ID, and the collateral-pair endpoint's auto-selected group is not proof of the obligation's current group. Use an exact documented source for that state; if it cannot be verified with the existing Go/API boundary, report the estimate unavailable rather than substituting a group.
+- Account for the obligation's effective debt (including public borrow factors) and use the SOL deposit liquidation LTV, optionally reduced to the obligation aggregate liquidation LTV, as a conservative public fallback. The portfolio schema does not expose the active elevation-group ID, and the pair endpoint's auto-selected group is not proof of the obligation's current group. The fallback must not claim to confirm that group or substitute a pair-specific unverified term.
 - The current provider's first-active-obligation behavior must be shared with the estimate path so the estimate cannot attach to another obligation.
 - Missing, stale, null, inconsistent, or ambiguous portfolio/oracle values produce an unavailable estimate while retaining a valid Health Factor whenever possible.
 
@@ -95,7 +95,7 @@ This keeps the estimator shared without forcing Aave and Kamino to share their t
 
 Use exact/scaled decimal arithmetic for external decimal values and intermediate USD calculations where practical (`math/big` from the standard library); avoid adding a decimal package for this feature. Use the asset price and decimals to round the implied asset quantity upward internally, convert that rounded quantity back to USD, and round the displayed USD amount upward to cents. Do not expose token quantity or unit price.
 
-Add the contribution line immediately after the existing line for a below-target Base/Solana position. Preserve existing labels and output for positions at/above 1.50, provider failures, and non-target networks. A failed estimate is distinct from a failed Health Factor and must not affect process exit status when the Health Factor succeeded.
+Add the contribution line immediately after the existing line for a Base/Solana position below desired target 2.00. Preserve existing labels and output for positions at/above 2.00, provider failures, and non-target networks. A failed estimate is distinct from a failed Health Factor and must not affect process exit status when the Health Factor succeeded.
 
 Align the existing Health Factor classification boundary so HF exactly 1.50 is Seguro, as specified. Keep this correction limited to the threshold behavior and cover it with a focused domain test.
 
