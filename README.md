@@ -91,7 +91,7 @@ The application is designed with a clear separation of concerns between domain, 
 
 ```mermaid
 flowchart TD
-    CLI["CLI\nhfmon"] --> CHECK["Check Service\n orchestration"]
+    CLI["CLI\nhf"] --> CHECK["Check Service\n orchestration"]
     CHECK --> AAVE["Aave Provider\nEthereum / Base RPC"]
     CHECK --> KAMINO["Kamino Provider\nKamino API"]
     AAVE --> DOMAIN["Domain / Models\nConfig / Provider\nHealthFactor"]
@@ -187,8 +187,12 @@ export PATH="$PATH:$(go env GOPATH)/bin"
 ### 3. Run
 
 ```bash
-hf -config ./config.json
+hf
 ```
+
+The CLI loads the configuration automatically from the user configuration
+directory (`hf/config.json`) or a local `config.json`. Use `-config` only when
+you want to select a different configuration file.
 
 For development, the CLI can still be run from the source tree:
 
@@ -201,9 +205,16 @@ go run ./cmd/hfmon -config ./config.json
 ```text
 Health Factor
 -------------
-Base:	🟩 1.97
-Solana:	🟩 2.22
+HF mínimo desejável: 2,00
+Base:   🟨 1.32
+        Aporte necessário (BTC): US$ 850,00
+Solana: 🟥 1.08
+        Aporte necessário (SOL): US$ 620,00
 ```
+
+Contribution amounts are illustrative. The CLI shows an estimate (or an
+unavailable status) when the Health Factor is below `2.00`; otherwise, it
+omits the contribution line.
 
 The output uses the network name rather than the configured alias or protocol. A position without an active debt is rendered as `no active debt` only when the provider returns an effectively infinite Aave health factor; provider failures or missing active borrow records are shown as `HF: unavailable`.
 
@@ -214,7 +225,7 @@ automatically. Configure the global file in the OS user configuration directory:
 
 ```bash
 mkdir -p "$HOME/.config/hf"
-cp /home/marcus/projects/health-factor-monitor/config.json "$HOME/.config/hf/config.json"
+cp ./config.json "$HOME/.config/hf/config.json"
 hf
 ```
 
