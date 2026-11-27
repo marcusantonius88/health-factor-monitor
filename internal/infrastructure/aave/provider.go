@@ -140,18 +140,18 @@ func (p *Provider) GetPositionSnapshot(ctx context.Context, address string) (*do
 
 	blockTag, err := p.getPinnedBlockTag(ctx)
 	if err != nil {
-		snapshot.ContributionUnavailableReason = "dados Aave indisponíveis no bloco atual"
+		snapshot.ContributionUnavailableReason = "Aave data unavailable at the current block"
 		return snapshot, nil
 	}
 
 	account, err := p.getUserAccountDataAtBlock(ctx, address, p.primaryPoolContract(), blockTag)
 	if err != nil {
-		snapshot.ContributionUnavailableReason = "dados da posição Aave indisponíveis"
+		snapshot.ContributionUnavailableReason = "Aave position data unavailable"
 		return snapshot, nil
 	}
 	value, err := healthFactorValue(account.healthFactor)
 	if err != nil {
-		snapshot.ContributionUnavailableReason = "Health Factor Aave inválido"
+		snapshot.ContributionUnavailableReason = "invalid Aave health factor"
 		return snapshot, nil
 	}
 	if value >= domain.TargetHealthFactor {
@@ -288,7 +288,7 @@ func (p *Provider) buildBTCContributionBasis(
 ) (*domain.ContributionBasis, error) {
 	reserves, err := p.getReservesListAtBlock(ctx, blockTag)
 	if err != nil {
-		return nil, errors.New("lista de reservas Aave não confirmada")
+		return nil, errors.New("Aave reserve list unconfirmed")
 	}
 
 	var eligible []string
@@ -303,7 +303,7 @@ func (p *Provider) buildBTCContributionBasis(
 		}
 	}
 	if len(eligible) == 0 {
-		return nil, errors.New("nenhuma reserva BTC elegível encontrada na posição Aave")
+		return nil, errors.New("no eligible BTC reserve found in Aave position")
 	}
 
 	var selected *domain.ContributionBasis
@@ -382,13 +382,13 @@ func (p *Provider) buildBTCContributionBasis(
 	if selected == nil {
 		switch {
 		case reserveConfigUnavailable:
-			return nil, errors.New("parâmetros de reserva Aave não confirmados")
+			return nil, errors.New("Aave reserve parameters unconfirmed")
 		case collateralEligibilityUnavailable:
-			return nil, errors.New("collateral BTC ou dados eMode Aave não confirmados")
+			return nil, errors.New("BTC collateral or Aave eMode data unconfirmed")
 		case oracleUnavailable:
-			return nil, errors.New("cotação BTC Aave indisponível ou não validada")
+			return nil, errors.New("BTC Aave price unavailable or unvalidated")
 		default:
-			return nil, errors.New("nenhuma reserva BTC elegível com cotação Aave validada")
+			return nil, errors.New("no eligible BTC reserve with a validated Aave price")
 		}
 	}
 	return selected, nil

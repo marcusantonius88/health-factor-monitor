@@ -27,8 +27,7 @@ func TestFormatResults(t *testing.T) {
 	}
 
 	got := FormatResults(results)
-	// Novo formato: Health Factor header + alinhamento com tabulação
-	want := "Health Factor\n-------------\nHF mínimo desejável: 2,00\nEthereum:\t🟩 no active debt\nSolana:\t🟩 2.18\n"
+	want := "HEALTH FACTOR MONITOR\n---------------------\nDesired Health Factor: 2.00\nEthereum:\t🟩 no active debt\nSolana:\t🟩 2.18\n"
 	if got != want {
 		t.Fatalf("FormatResults() = %q, want %q", got, want)
 	}
@@ -48,7 +47,7 @@ func TestFormatResultsContributionEstimateLines(t *testing.T) {
 			ContributionEstimate: &domain.ContributionEstimate{
 				Status:             domain.ContributionStatusAvailable,
 				AssetSymbol:        "BTC",
-				AmountUSD:          850,
+				AmountUSD:          1850.5,
 				TargetHealthFactor: domain.TargetHealthFactor,
 			},
 		},
@@ -71,11 +70,11 @@ func TestFormatResultsContributionEstimateLines(t *testing.T) {
 	}
 
 	got := FormatResults(results)
-	want := "Health Factor\n-------------\nHF mínimo desejável: 2,00\n" +
+	want := "HEALTH FACTOR MONITOR\n---------------------\nDesired Health Factor: 2.00\n" +
 		"Base:\t🟨 1.32\n" +
-		"\tAporte necessário (BTC): US$ 850,00\n" +
+		"\tRequired contribution (BTC): USD 1,850.50\n" +
 		"Solana:\t🟥 1.08\n" +
-		"\tAporte necessário (SOL): US$ 620,00\n"
+		"\tRequired contribution (SOL): USD 620.00\n"
 	if got != want {
 		t.Fatalf("FormatResults() = %q, want %q", got, want)
 	}
@@ -112,7 +111,7 @@ func TestFormatResultsOmitsContributionLinesForSafeAndOutOfScope(t *testing.T) {
 	}
 
 	got := FormatResults(results)
-	want := "Health Factor\n-------------\nHF mínimo desejável: 2,00\n" +
+	want := "HEALTH FACTOR MONITOR\n---------------------\nDesired Health Factor: 2.00\n" +
 		"Base:\t🟩 2.00\n" +
 		"Ethereum:\t🟨 1.32\n"
 	if got != want {
@@ -141,9 +140,9 @@ func TestFormatResultsGreenHealthFactorBelowDesiredTarget(t *testing.T) {
 	}
 
 	got := FormatResults(results)
-	want := "Health Factor\n-------------\nHF mínimo desejável: 2,00\n" +
+	want := "HEALTH FACTOR MONITOR\n---------------------\nDesired Health Factor: 2.00\n" +
 		"Base:\t🟩 1.50\n" +
-		"\tAporte necessário (BTC): US$ 850,00\n"
+		"\tRequired contribution (BTC): USD 850.00\n"
 	if got != want {
 		t.Fatalf("FormatResults() = %q, want %q", got, want)
 	}
@@ -163,7 +162,7 @@ func TestFormatResultsUnavailableContributionEstimates(t *testing.T) {
 			ContributionEstimate: &domain.ContributionEstimate{
 				Status:             domain.ContributionStatusUnavailable,
 				AssetSymbol:        "BTC",
-				Reason:             "dados de preço indisponíveis",
+				Reason:             "BTC price data unavailable",
 				TargetHealthFactor: domain.TargetHealthFactor,
 			},
 		},
@@ -179,23 +178,23 @@ func TestFormatResultsUnavailableContributionEstimates(t *testing.T) {
 			ContributionEstimate: &domain.ContributionEstimate{
 				Status:             domain.ContributionStatusUnavailable,
 				AssetSymbol:        "SOL",
-				Reason:             "parâmetros de risco não confirmados",
+				Reason:             "risk parameters unconfirmed",
 				TargetHealthFactor: domain.TargetHealthFactor,
 			},
 		},
 	}
 
 	got := FormatResults(results)
-	want := "Health Factor\n-------------\nHF mínimo desejável: 2,00\n" +
+	want := "HEALTH FACTOR MONITOR\n---------------------\nDesired Health Factor: 2.00\n" +
 		"Base:\t🟨 1.32\n" +
-		"\tAporte necessário (BTC): indisponível (dados de preço indisponíveis)\n" +
+		"\tRequired contribution (BTC): unavailable (BTC price data unavailable)\n" +
 		"Solana:\t🟥 1.08\n" +
-		"\tAporte necessário (SOL): indisponível (parâmetros de risco não confirmados)\n"
+		"\tRequired contribution (SOL): unavailable (risk parameters unconfirmed)\n"
 	if got != want {
 		t.Fatalf("FormatResults() = %q, want %q", got, want)
 	}
 
-	for _, forbidden := range []string{"US$", "850", "620", "BTC quantity", "SOL quantity", "unit price"} {
+	for _, forbidden := range []string{"USD", "1,850", "620", "BTC quantity", "SOL quantity", "unit price"} {
 		if strings.Contains(got, forbidden) {
 			t.Errorf("unavailable output contains prohibited text %q: %q", forbidden, got)
 		}

@@ -68,13 +68,13 @@ When a supported Aave/Base or Kamino/Solana position has a Health Factor below
 Example:
 
 ```text
-Health Factor
--------------
+HEALTH FACTOR MONITOR
+---------------------
 Base:   🟨 1.32
-        Aporte necessário (BTC): US$ 850,00
+        Required contribution (BTC): USD 850.00
 
 Solana: 🟥 1.08
-        Aporte necessário (SOL): indisponível (dados insuficientes)
+        Required contribution (SOL): unavailable (insufficient data)
 ```
 
 ### How the Application Works
@@ -203,13 +203,13 @@ go run ./cmd/hfmon -config ./config.json
 ### 4. Example Output
 
 ```text
-Health Factor
--------------
-HF mínimo desejável: 2,00
+HEALTH FACTOR MONITOR
+---------------------
+Desired Health Factor: 2.00
 Base:   🟨 1.32
-        Aporte necessário (BTC): US$ 850,00
+        Required contribution (BTC): USD 850.00
 Solana: 🟥 1.08
-        Aporte necessário (SOL): US$ 620,00
+        Required contribution (SOL): USD 620.00
 ```
 
 Contribution amounts are illustrative. The CLI shows an estimate (or an

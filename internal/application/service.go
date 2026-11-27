@@ -75,7 +75,7 @@ func (s *CheckService) checkPosition(ctx context.Context, pos domain.LendingPosi
 	}
 	snapshot, err := snapshotProvider.GetPositionSnapshot(ctx, pos.Wallet.Address)
 	if err != nil || snapshot == nil {
-		result.ContributionEstimate = unavailableContributionEstimate(pos, "dados auxiliares da estimativa indisponíveis")
+		result.ContributionEstimate = unavailableContributionEstimate(pos, "estimate data unavailable")
 		return result
 	}
 	if snapshot.HealthFactor != nil {
@@ -88,7 +88,7 @@ func (s *CheckService) checkPosition(ctx context.Context, pos domain.LendingPosi
 	if snapshot.ContributionBasis == nil {
 		reason := snapshot.ContributionUnavailableReason
 		if reason == "" {
-			reason = "dados insuficientes para estimar o aporte"
+			reason = "insufficient data to calculate contribution"
 		}
 		result.ContributionEstimate = unavailableContributionEstimate(pos, reason)
 		return result
@@ -96,7 +96,7 @@ func (s *CheckService) checkPosition(ctx context.Context, pos domain.LendingPosi
 
 	estimate, err := domain.CalculateContributionEstimate(*snapshot.ContributionBasis)
 	if err != nil {
-		result.ContributionEstimate = unavailableContributionEstimate(pos, "dados insuficientes para estimar o aporte")
+		result.ContributionEstimate = unavailableContributionEstimate(pos, "insufficient data to calculate contribution")
 		return result
 	}
 	if estimate != nil {

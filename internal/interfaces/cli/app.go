@@ -9,23 +9,24 @@ import (
 	"github.com/marcus/health-factor-monitor/internal/domain"
 )
 
-// FormatResults formata os resultados dos providers com classificação visual em emojis.
+// FormatResults formats provider results with visual emoji classification.
 //
-// Saída esperada:
+// Expected output:
 //
-//	Health Factor
-//	-------------
-//	Base:	🟩 1.97
+//	HEALTH FACTOR MONITOR
+//	---------------------
+//	Desired Health Factor: 2.00
+//	Base:	🟩 2.00
 //	Solana:	🟩 2.22
 //
-// ou com "unavailable" em caso de erro do provider.
+// or "unavailable" when a provider returns an error.
 func FormatResults(results []domain.ProviderResult) string {
 	var buf strings.Builder
 
 	// Header
-	buf.WriteString("Health Factor\n")
-	buf.WriteString("-------------\n")
-	buf.WriteString("HF mínimo desejável: 2,00\n")
+	buf.WriteString("HEALTH FACTOR MONITOR\n")
+	buf.WriteString("---------------------\n")
+	buf.WriteString("Desired Health Factor: 2.00\n")
 
 	for _, r := range results {
 		if r.Error != "" {
@@ -43,18 +44,18 @@ func FormatResults(results []domain.ProviderResult) string {
 				case domain.ContributionStatusAvailable:
 					fmt.Fprintf(
 						&buf,
-						"\tAporte necessário (%s): US$ %s\n",
+						"\tRequired contribution (%s): USD %s\n",
 						r.ContributionEstimate.AssetSymbol,
 						formatUSD(r.ContributionEstimate.AmountUSD),
 					)
 				case domain.ContributionStatusUnavailable:
 					reason := strings.TrimSpace(r.ContributionEstimate.Reason)
 					if reason == "" {
-						reason = "dados insuficientes"
+						reason = "insufficient data"
 					}
 					fmt.Fprintf(
 						&buf,
-						"\tAporte necessário (%s): indisponível (%s)\n",
+						"\tRequired contribution (%s): unavailable (%s)\n",
 						r.ContributionEstimate.AssetSymbol,
 						reason,
 					)
@@ -90,14 +91,13 @@ func formatUSD(amount float64) string {
 	}
 	formatted.WriteString(digits[:firstGroup])
 	for i := firstGroup; i < len(digits); i += 3 {
-		formatted.WriteByte('.')
+		formatted.WriteByte(',')
 		formatted.WriteString(digits[i : i+3])
 	}
-	return fmt.Sprintf("%s,%02d", formatted.String(), fraction)
+	return fmt.Sprintf("%s.%02d", formatted.String(), fraction)
 }
 
-// networkName retorna o nome da rede com base no valor do campo Network da
-// posição, capitalizando o primeiro letra (ethereum -> Ethereum, solana -> Solana).
+// networkName returns the display name for a network.
 func networkName(net string) string {
 	switch net {
 	case "ethereum":

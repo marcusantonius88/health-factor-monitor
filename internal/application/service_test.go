@@ -449,7 +449,7 @@ func TestEstimateUnavailableReasonPreservesHealthFactorAndHasNoAmount(t *testing
 		snapshot: &domain.PositionSnapshot{
 			Position:                      position,
 			HealthFactor:                  hf,
-			ContributionUnavailableReason: "parâmetros de elevação não confirmados",
+			ContributionUnavailableReason: "elevation parameters unconfirmed",
 		},
 	}
 
@@ -518,7 +518,7 @@ func TestEstimateFailureDoesNotSuppressOtherPositions(t *testing.T) {
 		snapshot: &domain.PositionSnapshot{
 			Position:                      kaminoPosition,
 			HealthFactor:                  kaminoHF,
-			ContributionUnavailableReason: "dados SOL incompletos",
+			ContributionUnavailableReason: "incomplete SOL data",
 		},
 	}
 

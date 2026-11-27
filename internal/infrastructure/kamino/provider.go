@@ -181,16 +181,16 @@ func (p *Provider) GetPositionSnapshot(ctx context.Context, address string) (*do
 
 	slot, err := p.getCurrentSlot(ctx)
 	if err != nil {
-		snapshot.ContributionUnavailableReason = "slot Solana indisponível"
+		snapshot.ContributionUnavailableReason = "Solana slot unavailable"
 		return snapshot, nil
 	}
 	portfolio, positionData, err := p.getRefreshedLendingPosition(ctx, address, slot)
 	if err != nil {
-		snapshot.ContributionUnavailableReason = "dados da API Kamino indisponíveis ou incompletos"
+		snapshot.ContributionUnavailableReason = "Kamino API data unavailable or incomplete"
 		return snapshot, nil
 	}
 	if len(portfolio.Sections.Lending.Errors) > 0 {
-		snapshot.ContributionUnavailableReason = "portfólio Kamino reportou erros de atualização"
+		snapshot.ContributionUnavailableReason = "Kamino portfolio reported refresh errors"
 		return snapshot, nil
 	}
 	appliedSlotValue := positionData.AppliedSlot
@@ -201,18 +201,18 @@ func (p *Provider) GetPositionSnapshot(ctx context.Context, address string) (*do
 		appliedSlotValue = portfolio.AppliedSlot
 	}
 	if appliedSlotValue == "" {
-		snapshot.ContributionUnavailableReason = "appliedSlot Kamino indisponível"
+		snapshot.ContributionUnavailableReason = "Kamino appliedSlot unavailable"
 		return snapshot, nil
 	}
 	appliedSlot, err := strconv.ParseUint(appliedSlotValue, 10, 64)
 	if err != nil || appliedSlot < slot {
-		snapshot.ContributionUnavailableReason = "portfólio Kamino não alcançou o slot solicitado"
+		snapshot.ContributionUnavailableReason = "Kamino portfolio did not reach the requested slot"
 		return snapshot, nil
 	}
 
 	solPrice, err := p.getSOLOracleAtMarket(ctx, positionData.Market)
 	if err != nil {
-		snapshot.ContributionUnavailableReason = "cotação SOL Kamino indisponível ou desatualizada"
+		snapshot.ContributionUnavailableReason = "SOL price unavailable or stale"
 		return snapshot, nil
 	}
 	basis, err := buildSOLContributionBasis(positionData, hf, solPrice)
@@ -396,7 +396,7 @@ func buildSOLContributionBasis(
 	solPrice *float64,
 ) (*domain.ContributionBasis, error) {
 	if position == nil || hf == nil || solPrice == nil {
-		return nil, errors.New("dados de contribuição SOL incompletos")
+		return nil, errors.New("incomplete SOL contribution data")
 	}
 
 	const solMint = "So11111111111111111111111111111111111111112"
@@ -410,11 +410,11 @@ func buildSOLContributionBasis(
 		}
 	}
 	if solDeposit == nil {
-		return nil, errors.New("reserva SOL elegível não confirmada")
+		return nil, errors.New("eligible SOL reserve unconfirmed")
 	}
 	liquidationLtv, err := parseDecimal(solDeposit.LiquidationLtv)
 	if err != nil || liquidationLtv <= 0 {
-		return nil, errors.New("liquidação SOL Kamino não confirmada")
+		return nil, errors.New("Kamino SOL liquidation LTV unconfirmed")
 	}
 	if strings.TrimSpace(position.LiquidationLtv) != "" {
 		obligationLiquidationLtv, err := parseDecimal(position.LiquidationLtv)
@@ -431,20 +431,20 @@ func buildSOLContributionBasis(
 		for _, borrow := range position.Borrows {
 			value, err := parseDecimal(borrow.Value)
 			if err != nil || value < 0 {
-				return nil, errors.New("valor de dívida Kamino incompleto")
+				return nil, errors.New("incomplete Kamino debt value")
 			}
 			factor := 1.0
 			if strings.TrimSpace(borrow.BorrowFactor) != "" {
 				factor, err = parseDecimal(borrow.BorrowFactor)
 				if err != nil || factor <= 0 {
-					return nil, errors.New("borrow factor Kamino inválido")
+					return nil, errors.New("invalid Kamino borrow factor")
 				}
 			}
 			effectiveDebt += value * factor
 		}
 	}
 	if err != nil || effectiveDebt <= 0 || *solPrice <= 0 {
-		return nil, errors.New("dados de dívida ou preço SOL inválidos")
+		return nil, errors.New("invalid debt data or SOL price")
 	}
 
 	basis := &domain.ContributionBasis{
